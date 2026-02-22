@@ -1,0 +1,14 @@
+# Local config contains real credentials — never commit
+config.php
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
