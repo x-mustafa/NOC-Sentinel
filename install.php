@@ -17,7 +17,11 @@ try {
         `id`            INT AUTO_INCREMENT PRIMARY KEY,
         `username`      VARCHAR(80)  NOT NULL UNIQUE,
         `password_hash` VARCHAR(255) NOT NULL,
-        `role`          ENUM('admin','viewer') DEFAULT 'admin',
+        `role`          ENUM('admin','operator','viewer') DEFAULT 'viewer',
+        `display_name`  VARCHAR(255) DEFAULT NULL,
+        `email`         VARCHAR(255) DEFAULT NULL,
+        `ldap_dn`       VARCHAR(500) DEFAULT NULL,
+        `last_login`    TIMESTAMP NULL DEFAULT NULL,
         `created_at`    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB");
 
@@ -63,6 +67,22 @@ try {
         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_time (`created_at`)
     ) ENGINE=InnoDB");
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS `ldap_config` (
+        `id`             INT AUTO_INCREMENT PRIMARY KEY,
+        `host`           VARCHAR(255) NOT NULL DEFAULT '',
+        `port`           INT          NOT NULL DEFAULT 389,
+        `base_dn`        VARCHAR(500) NOT NULL DEFAULT '',
+        `bind_dn`        VARCHAR(500) NOT NULL DEFAULT '',
+        `bind_pass`      TEXT         NOT NULL DEFAULT '',
+        `user_filter`    VARCHAR(500) NOT NULL DEFAULT '(&(objectClass=user)(sAMAccountName=%s))',
+        `admin_group`    VARCHAR(500) NOT NULL DEFAULT '',
+        `operator_group` VARCHAR(500) NOT NULL DEFAULT '',
+        `use_tls`        TINYINT(1)   NOT NULL DEFAULT 0,
+        `enabled`        TINYINT(1)   NOT NULL DEFAULT 0,
+        `updated_at`     TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB");
+    $pdo->exec("INSERT IGNORE INTO `ldap_config` (id) VALUES (1)");
 
     // ── DEFAULT DATA ─────────────────────────────────────
     // Admin user  (admin / tabadul)

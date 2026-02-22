@@ -37,6 +37,7 @@ if ($method === 'GET' && !empty($_GET['id'])) {
 
 // ── CREATE / UPDATE (upsert) ──────────────────────────────
 if ($method === 'POST') {
+    requireOperator();
     $b = json_decode(file_get_contents('php://input'), true) ?? [];
     if (empty($b['id']) || empty($b['label'])) jsonOut(['error' => 'id and label required'], 400);
 
@@ -62,6 +63,7 @@ if ($method === 'POST') {
 
 // ── UPDATE POSITIONS BULK ────────────────────────────────
 if ($method === 'PATCH') {
+    requireOperator();
     $b = json_decode(file_get_contents('php://input'), true) ?? [];
     // $b = [ { id, x, y }, ... ]
     $stmt = $db->prepare("UPDATE map_nodes SET x=?, y=? WHERE id=?");
@@ -73,6 +75,7 @@ if ($method === 'PATCH') {
 
 // ── DELETE ───────────────────────────────────────────────
 if ($method === 'DELETE') {
+    requireAdmin();
     $id = $_GET['id'] ?? null;
     if (!$id) jsonOut(['error' => 'id required'], 400);
     $db->prepare("DELETE FROM map_nodes WHERE id = ?")->execute([$id]);

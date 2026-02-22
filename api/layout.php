@@ -14,6 +14,7 @@ if ($method === 'GET') {
 
 // ── SAVE NEW LAYOUT ───────────────────────────────────────
 if ($method === 'POST') {
+    requireOperator();
     $b = json_decode(file_get_contents('php://input'), true) ?? [];
     if (empty($b['name'])) jsonOut(['error' => 'Name required'], 400);
 
@@ -53,6 +54,7 @@ if ($method === 'GET' && !empty($_GET['id'])) {
 
 // ── DELETE ───────────────────────────────────────────────
 if ($method === 'DELETE') {
+    requireAdmin();
     $id = $_GET['id'] ?? null;
     if (!$id) jsonOut(['error' => 'id required'], 400);
     // Also delete nodes belonging to this layout

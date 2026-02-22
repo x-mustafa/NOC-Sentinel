@@ -7,6 +7,7 @@ $action = $_GET['action'] ?? '';
 
 // ── ANALYZE IMAGE/PDF via Claude ──────────────────────────
 if ($action === 'analyze' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    requireOperator();
 
     $db  = getDB();
     $cfg = $db->query("SELECT claude_key FROM zabbix_config LIMIT 1")->fetch();
@@ -131,6 +132,7 @@ PROMPT;
 
 // ── CREATE MAP FROM CONFIRMED NODES ──────────────────────
 if ($action === 'create' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    requireOperator();
     $b       = json_decode(file_get_contents('php://input'), true) ?? [];
     $mapName = trim($b['name'] ?? 'Imported Map');
     $nodes   = $b['nodes'] ?? [];   // only matched nodes the user confirmed
@@ -177,6 +179,7 @@ if ($action === 'create' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // ── SAVE CLAUDE KEY ───────────────────────────────────────
 if ($action === 'savekey' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    requireAdmin();
     $b   = json_decode(file_get_contents('php://input'), true) ?? [];
     $key = trim($b['claude_key'] ?? '');
     if (!$key) jsonOut(['error' => 'Key required'], 400);

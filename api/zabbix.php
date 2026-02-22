@@ -142,8 +142,37 @@ elseif ($action === 'problems') {
     jsonOut($problems);
 }
 
+// ── INTERFACE TRAFFIC ─────────────────────────────────────
+elseif ($action === 'traffic') {
+    $hostIds = array_values(array_filter($_GET['hosts'] ?? []));
+    if (empty($hostIds)) jsonOut([]);
+
+    $itemsRaw = callZabbix('item.get', [
+        'output'                  => ['hostid', 'key_', 'lastvalue'],
+        'hostids'                 => $hostIds,
+        'search'                  => ['key_' => 'net.if'],
+        'searchWildcardsEnabled'  => true,
+        'monitored'               => true,
+        'limit'                   => 500,
+    ]);
+    $items = (is_array($itemsRaw) && !isset($itemsRaw['_zabbix_error'])) ? $itemsRaw : [];
+
+    $traffic = [];
+    foreach ($items as $item) {
+        if (!is_array($item) || isset($item['_zabbix_error'])) continue;
+        $hid = $item['hostid'];
+        $key = $item['key_'] ?? '';
+        $val = (float)($item['lastvalue'] ?? 0);
+        if (!isset($traffic[$hid])) $traffic[$hid] = ['in' => 0, 'out' => 0];
+        if (str_contains($key, '.in['))  $traffic[$hid]['in']  += $val;
+        if (str_contains($key, '.out[')) $traffic[$hid]['out'] += $val;
+    }
+    jsonOut($traffic);
+}
+
 // ── ACKNOWLEDGE ───────────────────────────────────────────
 elseif ($action === 'acknowledge' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    requireOperator();
     $b       = json_decode(file_get_contents('php://input'), true) ?? [];
     $eventid = $b['eventid'] ?? null;
     $msg     = $b['message'] ?? 'Acknowledged via Tabadul NOC';
@@ -168,6 +197,7 @@ elseif ($action === 'test') {
 
 // ── SAVE CONFIG ───────────────────────────────────────────
 elseif ($action === 'config' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    requireAdmin();
     $b = json_decode(file_get_contents('php://input'), true) ?? [];
     $db = getDB();
     $existing = $db->query("SELECT COUNT(*) FROM zabbix_config")->fetchColumn();
