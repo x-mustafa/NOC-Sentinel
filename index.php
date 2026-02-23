@@ -488,6 +488,9 @@ table.alarms-tbl{width:100%;border-collapse:collapse}
         <div class="map-list-item active-map" data-mapid="0" onclick="switchMap(0,'Network Map')">
           <span>🗺️</span><span>Network Map</span>
         </div>
+        <div class="map-list-item" data-mapid="-1" onclick="switchMap(-1,'POS MAP')">
+          <span>🗺️</span><span>POS MAP</span>
+        </div>
       </div>
     </div>
   </nav>
