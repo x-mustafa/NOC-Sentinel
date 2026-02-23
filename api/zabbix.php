@@ -7,22 +7,40 @@ $action = $_GET['action'] ?? '';
 
 // ── FULL STATUS (map + counts) ────────────────────────────
 if ($action === 'status') {
-    // 1. Hosts — 'available' moved to per-interface in Zabbix 7.x
-    $hostsRaw = callZabbix('host.get', [
+    // Collect Zabbix host IDs: from client JS (nodeHostMap) + from saved DB nodes
+    $clientHostIds = array_values(array_filter($_GET['hostids'] ?? []));
+    $dbHostIds = [];
+    try {
+        $db   = getDB();
+        $rows = $db->query(
+            "SELECT DISTINCT zabbix_host_id FROM map_nodes WHERE zabbix_host_id IS NOT NULL AND zabbix_host_id != ''"
+        )->fetchAll(\PDO::FETCH_COLUMN);
+        $dbHostIds = array_values($rows);
+    } catch (\Exception $e) {}
+    $mapHostIds = array_values(array_unique(array_merge($clientHostIds, $dbHostIds)));
+
+    // 1. Hosts — filtered to map nodes if any are linked
+    $hostGetParams = [
         'output'           => ['hostid', 'host', 'name', 'status', 'description'],
         'selectInterfaces' => ['ip', 'main', 'type', 'available'],
         'monitored_hosts'  => 1,
-    ]);
+    ];
+    if (!empty($mapHostIds)) $hostGetParams['hostids'] = $mapHostIds;
+
+    $hostsRaw = callZabbix('host.get', $hostGetParams);
     $hosts = (is_array($hostsRaw) && !isset($hostsRaw['_zabbix_error'])) ? $hostsRaw : [];
 
-    // 2. Active problems — Zabbix 7.x only accepts 'eventid' in sortfield
-    $problemsRaw = callZabbix('problem.get', [
+    // 2. Active problems — filtered to map hosts if any are linked
+    $probGetParams = [
         'output'             => ['eventid', 'objectid', 'name', 'severity', 'clock', 'acknowledged'],
         'selectAcknowledges' => ['clock', 'message', 'userid'],
         'sortfield'          => 'eventid',
         'sortorder'          => 'DESC',
         'limit'              => 1000,
-    ]);
+    ];
+    if (!empty($mapHostIds)) $probGetParams['hostids'] = $mapHostIds;
+
+    $problemsRaw = callZabbix('problem.get', $probGetParams);
     $problems = (is_array($problemsRaw) && !isset($problemsRaw['_zabbix_error'])) ? $problemsRaw : [];
 
     // 3. Triggers for host mapping
@@ -104,6 +122,18 @@ elseif ($action === 'problems') {
     $severity = isset($_GET['severity']) ? (int)$_GET['severity'] : -1;
     $hostid   = $_GET['hostid'] ?? null;
 
+    // Collect host IDs: client-provided (from JS nodeHostMap) + DB saved nodes
+    $clientHostIds = array_values(array_filter($_GET['hostids'] ?? []));
+    $dbHostIds = [];
+    try {
+        $db   = getDB();
+        $rows = $db->query(
+            "SELECT DISTINCT zabbix_host_id FROM map_nodes WHERE zabbix_host_id IS NOT NULL AND zabbix_host_id != ''"
+        )->fetchAll(\PDO::FETCH_COLUMN);
+        $dbHostIds = array_values($rows);
+    } catch (\Exception $e) {}
+    $mapHostIds = array_values(array_unique(array_merge($clientHostIds, $dbHostIds)));
+
     $params = [
         'output'             => 'extend',
         'selectAcknowledges' => 'extend',
@@ -112,7 +142,12 @@ elseif ($action === 'problems') {
         'limit'              => 500,
     ];
     if ($severity >= 0) $params['severities'] = [$severity];
-    if ($hostid) $params['hostids'] = [$hostid];
+    // Specific single-host filter overrides; otherwise use map IDs
+    if ($hostid) {
+        $params['hostids'] = [$hostid];
+    } elseif (!empty($mapHostIds)) {
+        $params['hostids'] = $mapHostIds;
+    }
 
     $problemsRaw = callZabbix('problem.get', $params);
     $problems = (is_array($problemsRaw) && !isset($problemsRaw['_zabbix_error'])) ? $problemsRaw : [];
@@ -168,6 +203,69 @@ elseif ($action === 'traffic') {
         if (str_contains($key, '.out[')) $traffic[$hid]['out'] += $val;
     }
     jsonOut($traffic);
+}
+
+// ── ITEM HISTORY (for panel sparklines) ───────────────────
+elseif ($action === 'history') {
+    requireSession();
+    $hostId = trim($_GET['hostid'] ?? '');
+    if (!$hostId) jsonOut(['error' => 'Missing hostid'], 400);
+
+    // Targeted per-slot searches — avoids missing items due to large item sets
+    $slotPatterns = [
+        'cpu' => ['system.cpu.util', 'system.cpu.load[percpu,avg1]', 'system.cpu.load'],
+        'mem' => ['vm.memory.size[pused]', 'vm.memory.utilization', 'vm.memory.size[available]'],
+        'net' => ['net.if.in', 'net.if.out'],
+    ];
+
+    $now    = time();
+    $from   = $now - 3600;
+    $result = [];
+
+    foreach ($slotPatterns as $slot => $patterns) {
+        $item = null;
+        foreach ($patterns as $pat) {
+            $raw = callZabbix('item.get', [
+                'output'                 => ['itemid', 'key_', 'name', 'value_type', 'units', 'lastvalue'],
+                'hostids'                => [$hostId],
+                'search'                 => ['key_' => $pat],
+                'searchWildcardsEnabled' => true,
+                'monitored'              => true,
+                'limit'                  => 1,
+            ]);
+            if (is_array($raw) && !isset($raw['_zabbix_error']) && !empty($raw)) {
+                $item = $raw[0];
+                break;
+            }
+        }
+        if (!$item) continue;
+
+        $history = callZabbix('history.get', [
+            'output'    => ['clock', 'value'],
+            'history'   => (int)($item['value_type'] ?? 0),
+            'itemids'   => [$item['itemid']],
+            'time_from' => $from,
+            'time_till' => $now,
+            'limit'     => 120,
+            'sortfield' => 'clock',
+            'sortorder' => 'ASC',
+        ]);
+        $pts = [];
+        if (is_array($history) && !isset($history['_zabbix_error'])) {
+            foreach ($history as $h) {
+                $pts[] = ['t' => (int)$h['clock'], 'v' => (float)$h['value']];
+            }
+        }
+        $result[] = [
+            'slot'      => $slot,
+            'name'      => $item['name'],
+            'units'     => $item['units'] ?? '',
+            'lastvalue' => $item['lastvalue'] ?? '0',
+            'history'   => $pts,
+        ];
+    }
+
+    jsonOut($result);
 }
 
 // ── ACKNOWLEDGE ───────────────────────────────────────────

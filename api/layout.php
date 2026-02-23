@@ -7,7 +7,7 @@ $db     = getDB();
 $method = $_SERVER['REQUEST_METHOD'];
 
 // ── GET ALL ──────────────────────────────────────────────
-if ($method === 'GET') {
+if ($method === 'GET' && empty($_GET['id'])) {
     $rows = $db->query("SELECT id, name, is_default, created_at FROM map_layouts ORDER BY is_default DESC, created_at DESC")->fetchAll();
     jsonOut($rows);
 }

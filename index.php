@@ -557,6 +557,9 @@ table.alarms-tbl{width:100%;border-collapse:collapse}
       </button>
       <button class="tb-btn" onclick="saveLayoutPrompt()">💾 Save Layout</button>
       <button class="tb-btn" onclick="resetLayout()">↺ Reset</button>
+      <button class="tb-btn" onclick="openDiscoverModal()" title="Auto-Discover from Zabbix" style="display:flex;align-items:center;gap:4px">
+        <i data-lucide="radar" style="width:12px;height:12px"></i> Discover
+      </button>
       <button class="tb-btn add" onclick="openAddModal()">＋ Add Node</button>
     </div>
     <!-- Canvas -->
@@ -960,6 +963,46 @@ table.alarms-tbl{width:100%;border-collapse:collapse}
   </div>
 </div>
 
+<!-- ══ DISCOVER MODAL ══ -->
+<div class="modal-overlay" id="discover-modal" style="display:none">
+  <div class="modal-card" style="width:640px;max-width:96vw;max-height:88vh;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-shrink:0">
+      <h3 style="margin:0;font-size:15px;font-weight:700;color:#fff">
+        <i data-lucide="radar" style="width:15px;height:15px;vertical-align:-2px;color:var(--cyan)"></i>
+        Zabbix Topology Auto-Discovery
+      </h3>
+      <button class="dp-close" onclick="closeDiscoverModal()">×</button>
+    </div>
+
+    <!-- Step 1: Scan & Select -->
+    <div id="disc-step1" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+      <div class="ef" style="flex-shrink:0">
+        <label>Map Name</label>
+        <input class="edit-inp" id="disc-name" value="Auto-Discovered Map" />
+      </div>
+      <div id="disc-scan-state" style="text-align:center;padding:30px 0;color:var(--muted);font-size:12px">
+        Click Scan to discover hosts from Zabbix
+      </div>
+      <div id="disc-subnet-list" style="flex:1;overflow-y:auto;display:none"></div>
+      <div style="flex-shrink:0;margin-top:12px;display:flex;gap:8px;align-items:center">
+        <button class="btn btn-ghost" id="disc-scan-btn" onclick="doDiscoverScan()">
+          <i data-lucide="search" style="width:12px;height:12px;vertical-align:-1px"></i> Scan Zabbix
+        </button>
+        <span id="disc-scan-summary" style="font-size:11px;color:var(--muted)"></span>
+        <button class="btn btn-primary" id="disc-create-btn" style="margin-left:auto;display:none" onclick="doDiscoverCreate()">
+          Create Map →
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 2: Done -->
+    <div id="disc-step2" style="display:none;text-align:center;padding:40px 0">
+      <div id="disc-done-msg" style="font-size:14px;color:var(--green);margin-bottom:12px"></div>
+      <button class="btn btn-primary" onclick="closeDiscoverModal()">Done</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOOLTIP -->
 <div id="vis-tip">
   <div class="t-name" id="tip-name"></div>
@@ -1174,6 +1217,11 @@ const visNetwork = new vis.Network(document.getElementById('vis-network'), {node
   nodes:{borderWidth:2,shadow:{enabled:true,color:'rgba(0,0,0,.5)',size:10,x:0,y:3}},
 });
 
+// ── Snapshot default map so we can restore it when switching back to id=0
+const _defaultNodes = visNodes.get();
+const _defaultEdges = visEdges.get();
+const _defaultDeviceData = JSON.parse(JSON.stringify(deviceData));
+
 // Save positions on drag
 visNetwork.on('dragEnd', p => { if(p.nodes.length) savePositions(); });
 
@@ -1244,7 +1292,9 @@ let refreshSeq = 0;
 async function refreshData(){
   const t0 = Date.now();
   try{
-    const data = await api('api/zabbix.php?action=status');
+    const mapIds = [...S.currentMapHostIds];
+    const qs = mapIds.length ? '&' + mapIds.map(h=>'hostids[]='+encodeURIComponent(h)).join('&') : '';
+    const data = await api('api/zabbix.php?action=status'+qs);
     if(!data) return;
 
     // Build host lookup
@@ -1371,7 +1421,15 @@ function showPanel(nid){
     </div>
     ${infoHtml?`<div class="info-section"><div class="info-sec-title">Config</div>${infoHtml}</div>`:''}
     ${ifaceHtml?`<div class="info-section"><div class="info-sec-title">Interfaces</div><div style="margin-top:4px">${ifaceHtml}</div></div>`:''}
+    ${hostId?`<div class="info-section" id="dp-perf-section">
+      <div class="info-sec-title">Performance (1h)</div>
+      <div id="dp-graphs" style="display:flex;flex-direction:column;gap:8px;margin-top:6px">
+        <div style="color:var(--muted);font-size:11px;text-align:center;padding:8px 0">Loading…</div>
+      </div>
+    </div>`:''}
   `;
+
+  if(hostId) loadPanelGraphs(hostId);
 
   document.getElementById('dp-footer').style.display='flex';
   const canEdit=S.myRole!=='viewer';
@@ -1586,9 +1644,39 @@ function resetLayout(){
 function saveNodeHostMap(){
   localStorage.setItem('tab_nhm',JSON.stringify(S.nodeHostMap));
 }
+// Default node → Zabbix host mappings (verified against zabbix.tabadul.iq)
+const DEFAULT_NODE_HOST_MAP = {
+  'inet-sw':   '10785',  // INT-SW            10.1.0.15
+  'core-sw':   '10929',  // CoreSwitch        10.1.0.5
+  'pmt-fw1':   '10907',  // Fortigate FW      10.1.0.1
+  'pmt-fw2':   '11108',  // Fortigate FW 2    10.1.0.202
+  'fp1':       '10839',  // FTD-1 (Firepower) 10.1.0.4
+  'fp2':       '10840',  // FTD-2             10.1.0.6
+  'tor1':      '10898',  // Tor-1             10.1.0.7
+  'tor2':      '10899',  // Tor-2             10.1.0.8
+  'palo1':     '10832',  // PA-1              10.1.0.13
+  'palo2':     '10831',  // PA-2              10.1.0.14
+  'f5-1':      '10830',  // F5-1              10.1.0.11
+  'f5-2':      '10829',  // F5-2              10.1.0.12
+  'hsm-auth1': '10875',  // HSM-Auth-1        100.66.0.122
+  'hsm-auth2': '10876',  // HSM-Auth-2        100.66.0.123
+  'hsm-acs1':  '10877',  // HSM-ACS-1         100.66.0.124
+  'hsm-acs2':  '10878',  // HSM-ACS-2         100.66.0.125
+  'ag1000':    '10871',  // AG-01 (AG1000)    100.64.2.68
+  'olvm':      '10776',  // MGM - OLVM        10.1.0.25
+  'scopesky':  '10906',  // ScopeSky-Public   204.106.240.53
+  'dr':        '10900',  // DR-Monitor        100.127.40.2
+  'veeam':     '10841',  // ITP-e01-veeam     100.65.0.247
+  'hv-prod':   '10778',  // MGM-HVN-PROD01    10.1.0.21
+};
+
 function loadNodeHostMap(){
   const raw=localStorage.getItem('tab_nhm');
-  if(raw) S.nodeHostMap=JSON.parse(raw);
+  const stored = raw ? JSON.parse(raw) : {};
+  // Merge: defaults first, then stored (stored values override defaults)
+  S.nodeHostMap = {...DEFAULT_NODE_HOST_MAP, ...stored};
+  // Persist merged result so future saves include defaults
+  localStorage.setItem('tab_nhm', JSON.stringify(S.nodeHostMap));
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1619,6 +1707,8 @@ function searchNode(q){
 async function refreshAlarms(){
   const params=[];
   if(S.currentAlarmFilter>=0) params.push('severity='+S.currentAlarmFilter);
+  const mapIds=[...S.currentMapHostIds];
+  mapIds.forEach(h=>params.push('hostids[]='+encodeURIComponent(h)));
   const probs=await api('api/zabbix.php?action=problems'+(params.length?'&'+params.join('&'):''))||[];
   S.allProblems=probs;
   renderAlarms();
@@ -1945,9 +2035,21 @@ async function switchMap(id, name){
   // Update page title
   document.getElementById('page-title').textContent=name;
   if(id===0){
-    // Default map: use all nodeHostMap entries from vis nodes
+    // Restore default map nodes/edges/deviceData from startup snapshot
+    visNodes.clear(); visEdges.clear();
+    visNodes.add(_defaultNodes);
+    visEdges.add(_defaultEdges);
+    Object.keys(deviceData).forEach(k=>delete deviceData[k]);
+    Object.assign(deviceData, JSON.parse(JSON.stringify(_defaultDeviceData)));
+    S.nodeHostMap={...DEFAULT_NODE_HOST_MAP};
     S.currentMapHostIds=new Set(Object.values(S.nodeHostMap).filter(Boolean));
+    saveNodeHostMap();
     navigate('map');
+    document.getElementById('page-title').textContent='Network Map';
+    setTimeout(()=>visNetwork.fit({animation:{duration:500}}),100);
+    updateMapStatus();
+    renderHosts();
+    renderAlarms();
     return;
   }
   // Load imported layout
@@ -1961,10 +2063,15 @@ async function switchMap(id, name){
     visNodes.add(mkNode(n.id, n.label, n.type||'switch', n.x, n.y, {size:22,fontSize:10}));
     deviceData[n.id]={name:n.label,ip:n.ip,role:'',type:n.type||'switch',status:n.status||'ok',ifaces:n.ifaces||[],info:n.info||{}};
   });
+  // Load edges stored in positions.edges (auto-discovered maps: star topology per subnet)
+  (layout.positions?.edges||[]).forEach(e=>{
+    visEdges.add(mkEdge(e.from, e.to, '#1e3a5f'));
+  });
   S.nodeHostMap=newMap;
   S.currentMapHostIds=new Set(Object.values(newMap).filter(Boolean));
   saveNodeHostMap();
   navigate('map');
+  document.getElementById('page-title').textContent=name;
   setTimeout(()=>visNetwork.fit({animation:{duration:500}}),100);
   updateMapStatus();
   renderHosts();
@@ -2766,6 +2873,241 @@ document.getElementById('l-user').focus();
 
 // Close modals on overlay click
 document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
+
+// ── INLINE SPARKLINE GRAPHS ────────────────────────────────
+function formatMetricValue(value, units){
+  const v = parseFloat(value);
+  if(isNaN(v)) return '—';
+  if(units==='%') return v.toFixed(1)+'%';
+  if(units==='bps'||units==='Bps') return formatBps(v*8);
+  if(units==='B'){
+    if(v>=1e9) return (v/1e9).toFixed(1)+'GB';
+    if(v>=1e6) return (v/1e6).toFixed(1)+'MB';
+    if(v>=1e3) return (v/1e3).toFixed(1)+'KB';
+    return v+'B';
+  }
+  if(Math.abs(v)>=1e6) return (v/1e6).toFixed(1)+'M';
+  if(Math.abs(v)>=1e3) return (v/1e3).toFixed(1)+'K';
+  return v%1===0 ? v.toString() : v.toFixed(2);
+}
+
+function drawSparkline(canvas, points, accentColor){
+  accentColor = accentColor||'#00d4ff';
+  const ctx=canvas.getContext('2d');
+  const W=canvas.width, H=canvas.height;
+  ctx.clearRect(0,0,W,H);
+  if(points.length<2) return;
+  const vals=points.map(p=>p.v);
+  const min=Math.min(...vals), max=Math.max(...vals);
+  const range=max-min||1;
+  const px=3;
+  const xOf=i=>px+(i/(points.length-1))*(W-2*px);
+  const yOf=v=>H-px-((v-min)/range)*(H-2*px);
+  // gradient fill
+  const grd=ctx.createLinearGradient(0,0,0,H);
+  grd.addColorStop(0,accentColor+'55');
+  grd.addColorStop(1,accentColor+'08');
+  ctx.beginPath();
+  ctx.moveTo(xOf(0),H);
+  ctx.lineTo(xOf(0),yOf(points[0].v));
+  points.forEach((p,i)=>ctx.lineTo(xOf(i),yOf(p.v)));
+  ctx.lineTo(xOf(points.length-1),H);
+  ctx.closePath();
+  ctx.fillStyle=grd;
+  ctx.fill();
+  // line
+  ctx.beginPath();
+  ctx.strokeStyle=accentColor;
+  ctx.lineWidth=1.5;
+  ctx.lineJoin='round';
+  points.forEach((p,i)=>i===0?ctx.moveTo(xOf(i),yOf(p.v)):ctx.lineTo(xOf(i),yOf(p.v)));
+  ctx.stroke();
+  // last-point dot
+  ctx.beginPath();
+  ctx.arc(xOf(points.length-1),yOf(points[points.length-1].v),2.5,0,Math.PI*2);
+  ctx.fillStyle=accentColor;
+  ctx.fill();
+}
+
+const SLOT_COLOR={cpu:'#f97316',mem:'#a78bfa',net:'#00d4ff'};
+
+function renderMiniChart(container, metric){
+  const color=SLOT_COLOR[metric.slot]||'#00d4ff';
+  const wrap=document.createElement('div');
+  wrap.style.cssText='background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px';
+  const val=formatMetricValue(metric.lastvalue, metric.units);
+  wrap.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+      <span style="font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px">${metric.name}</span>
+      <span style="font-size:11px;font-weight:700;color:${color};margin-left:6px;flex-shrink:0">${val}</span>
+    </div>
+    <canvas width="260" height="44" style="width:100%;height:44px;display:block"></canvas>
+  `;
+  container.appendChild(wrap);
+  if(metric.history.length>=2) drawSparkline(wrap.querySelector('canvas'),metric.history,color);
+}
+
+async function loadPanelGraphs(hostId){
+  const el=document.getElementById('dp-graphs');
+  if(!el) return;
+  try{
+    const r=await fetch('api/zabbix.php?action=history&hostid='+encodeURIComponent(hostId));
+    const data=await r.json();
+    if(!Array.isArray(data)||!data.length){
+      el.innerHTML='<div style="color:var(--muted);font-size:11px;text-align:center;padding:8px 0">No metrics found</div>';
+      return;
+    }
+    el.innerHTML='';
+    data.forEach(m=>renderMiniChart(el,m));
+  }catch(_){
+    el.innerHTML='<div style="color:var(--muted);font-size:11px;text-align:center;padding:8px 0">Could not load metrics</div>';
+  }
+}
+
+// ── TOPOLOGY AUTO-DISCOVERY ────────────────────────────────
+let _discData = null;
+
+function openDiscoverModal(){
+  _discData = null;
+  document.getElementById('disc-step1').style.display='flex';
+  document.getElementById('disc-step2').style.display='none';
+  document.getElementById('disc-subnet-list').style.display='none';
+  document.getElementById('disc-subnet-list').innerHTML='';
+  document.getElementById('disc-scan-summary').textContent='';
+  document.getElementById('disc-create-btn').style.display='none';
+  document.getElementById('disc-scan-state').style.display='block';
+  document.getElementById('disc-scan-state').textContent='Click Scan to discover hosts from Zabbix';
+  document.getElementById('disc-scan-btn').disabled=false;
+  document.getElementById('disc-scan-btn').innerHTML='<i data-lucide="search" style="width:12px;height:12px;vertical-align:-1px"></i> Scan Zabbix';
+  document.getElementById('discover-modal').style.display='flex';
+  lucide.createIcons();
+}
+
+function closeDiscoverModal(){
+  document.getElementById('discover-modal').style.display='none';
+}
+
+async function doDiscoverScan(){
+  const btn = document.getElementById('disc-scan-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<i data-lucide="loader" style="width:12px;height:12px"></i> Scanning…';
+  lucide.createIcons();
+  document.getElementById('disc-scan-state').style.display='block';
+  document.getElementById('disc-scan-state').textContent = 'Scanning Zabbix hosts…';
+  document.getElementById('disc-subnet-list').style.display='none';
+  document.getElementById('disc-create-btn').style.display='none';
+  try {
+    const r = await fetch('api/discover.php?action=scan', {credentials:'include'});
+    _discData = await r.json();
+    if(_discData.error){ document.getElementById('disc-scan-state').textContent='Error: '+_discData.error; }
+    else { renderDiscoverSubnets(_discData); }
+  } catch(e) {
+    document.getElementById('disc-scan-state').textContent = 'Scan failed: ' + e.message;
+  }
+  btn.disabled = false;
+  btn.innerHTML = '<i data-lucide="search" style="width:12px;height:12px;vertical-align:-1px"></i> Re-Scan';
+  lucide.createIcons();
+}
+
+function renderDiscoverSubnets(data){
+  const list = document.getElementById('disc-subnet-list');
+  const subnets = data.subnets || [];
+  const singletons = data.singletons || [];
+
+  list.innerHTML = subnets.map((s,i) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;background:var(--surface2)">
+      <input type="checkbox" id="disc-chk-${i}" checked style="flex-shrink:0;accent-color:var(--cyan)">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:11px;font-weight:600;color:#fff;font-family:'JetBrains Mono',monospace">${s.subnet}</span>
+          <span style="font-size:10px;color:var(--muted)">${s.hosts.length} hosts</span>
+        </div>
+        <input class="edit-inp" id="disc-label-${i}" value="${guessSubnetLabel(s.subnet)}"
+          style="margin-top:4px;padding:3px 8px;font-size:10px;height:24px;width:200px">
+      </div>
+      <div style="font-size:10px;color:var(--muted);text-align:right;flex-shrink:0">
+        ${s.hosts.slice(0,3).map(h=>`<div>${h.host}</div>`).join('')}
+        ${s.hosts.length>3?`<div style="color:var(--cyan)">+${s.hosts.length-3} more</div>`:''}
+      </div>
+    </div>
+  `).join('') + (singletons.length ? `
+    <div style="padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface2)">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <input type="checkbox" id="disc-chk-single" style="accent-color:var(--cyan)">
+        <span style="font-size:11px;font-weight:600;color:#fff">Single-host subnets</span>
+        <span style="font-size:10px;color:var(--muted)">${singletons.length} hosts</span>
+      </div>
+    </div>
+  ` : '');
+
+  document.getElementById('disc-scan-state').style.display='none';
+  list.style.display='block';
+  document.getElementById('disc-scan-summary').textContent =
+    subnets.length + ' subnets, ' +
+    subnets.reduce((a,s)=>a+s.hosts.length,0) + ' hosts found';
+  document.getElementById('disc-create-btn').style.display='block';
+}
+
+function guessSubnetLabel(subnet){
+  const m = subnet.match(/^(\d+)\.(\d+)\.(\d+)/);
+  if(!m) return subnet;
+  const [,a,b,c] = m;
+  if(a==='10'&&b==='1'&&c==='0')    return 'Core Network';
+  if(a==='100'&&b==='66')           return 'Application Zone';
+  if(a==='100'&&b==='65')           return 'Virtualization Zone';
+  if(a==='100'&&b==='64'&&c==='2')  return 'Infrastructure Zone';
+  if(a==='100'&&b==='64'&&c==='0')  return 'Management Zone';
+  if(a==='100'&&b==='67')           return 'Office Network';
+  if(a==='100'&&b==='127')          return 'DR Zone';
+  if(a==='100'&&b==='69')           return 'Remote Sites';
+  if(a==='127')                     return 'Loopback (skip)';
+  return subnet;
+}
+
+async function doDiscoverCreate(){
+  if(!_discData) return;
+  const subnets = _discData.subnets || [];
+  const singletons = _discData.singletons || [];
+  const selected = [];
+
+  subnets.forEach((s,i) => {
+    if(document.getElementById('disc-chk-'+i)?.checked){
+      selected.push({
+        subnet: s.subnet,
+        label:  document.getElementById('disc-label-'+i)?.value || s.subnet,
+        hosts:  s.hosts,
+      });
+    }
+  });
+  if(document.getElementById('disc-chk-single')?.checked && singletons.length){
+    selected.push({subnet:'other', label:'Other Hosts', hosts: singletons});
+  }
+  if(!selected.length){ alert('Select at least one subnet'); return; }
+
+  const btn = document.getElementById('disc-create-btn');
+  btn.disabled = true;
+  btn.textContent = 'Creating…';
+
+  const name = document.getElementById('disc-name').value.trim() || 'Auto-Discovered Map';
+  try {
+    const r = await api('api/discover.php?action=create', {
+      method: 'POST',
+      body: JSON.stringify({name, subnets: selected}),
+    });
+    if(r?.ok){
+      document.getElementById('disc-step1').style.display='none';
+      document.getElementById('disc-step2').style.display='block';
+      document.getElementById('disc-done-msg').textContent =
+        '✓ "' + name + '" created with ' + r.nodes_created + ' nodes';
+      loadMaps();
+      switchMap(r.layout_id, name);
+    } else {
+      alert('Error: ' + (r?.error||'Unknown'));
+    }
+  } catch(e){ alert('Create failed: '+e.message); }
+  btn.disabled = false;
+  btn.textContent = 'Create Map →';
+}
 </script>
 </body>
 </html>
