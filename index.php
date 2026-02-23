@@ -1246,26 +1246,26 @@ const _posmapDeviceData = {
 
 function buildPosmapNodes(){
   return [
-    // ── WAN / ISP layer (top, spread horizontally)
-    mkNode('pos-asia-wan',    'Asia Link P2P\n172.22.223.130',   'wan',      -500, -560, {size:24, fontSize:10}),
-    mkNode('pos-zain-wan',    'Zain Link P2P\n10.106.23.193',    'wan',         0, -560, {size:24, fontSize:10}),
-    mkNode('pos-passport-wan','Passport Link P2P\n172.17.252.9', 'wan',       500, -560, {size:24, fontSize:10}),
-    // ── Internet Switch (shared)
-    mkNode('pos-inet-sw',     'Internet Switch\n10.1.0.15',      'switch',      0, -370, {size:32, fontSize:12}),
-    // ── Core Switch (shared)
-    mkNode('pos-core-sw',     'Core Switch\n10.1.0.5',           'switch',      0, -180, {size:32, fontSize:12}),
-    // ── FortiGate (multi-WAN, shared)
-    mkNode('pos-fgt',         'FGT Edge FW\n10.1.0.1',           'firewall',    0,   10, {size:30, fontSize:11}),
-    // ── FTD (shared)
-    mkNode('pos-ftd',         'FTD\n100.65.0.241',               'firewall',    0,  200, {size:28, fontSize:11}),
+    // ── WAN / ISP layer (left, spread vertically)
+    mkNode('pos-asia-wan',    'Asia Link P2P\n172.22.223.130',   'wan',      -750, -180, {size:24, fontSize:10}),
+    mkNode('pos-zain-wan',    'Zain Link P2P\n10.106.23.193',    'wan',      -750,    0, {size:24, fontSize:10}),
+    mkNode('pos-passport-wan','Passport Link P2P\n172.17.252.9', 'wan',      -750,  180, {size:24, fontSize:10}),
+    // ── Internet Switch
+    mkNode('pos-inet-sw',     'Internet Switch\n10.1.0.15',      'switch',   -480,    0, {size:32, fontSize:12}),
+    // ── Core Switch
+    mkNode('pos-core-sw',     'Core Switch\n10.1.0.5',           'switch',   -220,    0, {size:32, fontSize:12}),
+    // ── FortiGate (multi-WAN)
+    mkNode('pos-fgt',         'FGT Edge FW\n10.1.0.1',           'firewall',   50,    0, {size:30, fontSize:11}),
+    // ── FTD
+    mkNode('pos-ftd',         'FTD\n100.65.0.241',               'firewall',  300,    0, {size:28, fontSize:11}),
     // ── TOR switches
-    mkNode('pos-tor1',        'TOR 1\n10.1.0.7',                 'switch',    220,  390, {size:28, fontSize:11}),
-    mkNode('pos-tor-lan1',    'TOR-LAN 1\n10.1.0.81',            'switch',   -220,  390, {size:28, fontSize:11}),
+    mkNode('pos-tor1',        'TOR 1\n10.1.0.7',                 'switch',    560, -120, {size:28, fontSize:11}),
+    mkNode('pos-tor-lan1',    'TOR-LAN 1\n10.1.0.81',            'switch',    560,  120, {size:28, fontSize:11}),
     // ── End devices
-    mkNode('pos-ag1000',      'AG1000\n10.65.0.149',             'switch',   -220,  580, {size:22, fontSize:10}),
-    mkNode('pos-svlp',        'SVLP\n100.66.0.3',                'server',     30,  580, {size:22, fontSize:10}),
-    mkNode('pos-f5',          'F5\n10.1.0.11',                   'f5',        220,  580, {size:22, fontSize:10}),
-    mkNode('pos-svfe',        'SVFE\n100.66.0.6',                'server',    420,  580, {size:22, fontSize:10}),
+    mkNode('pos-svlp',        'SVLP\n100.66.0.3',                'server',    820, -220, {size:22, fontSize:10}),
+    mkNode('pos-f5',          'F5\n10.1.0.11',                   'f5',        820,  -80, {size:22, fontSize:10}),
+    mkNode('pos-svfe',        'SVFE\n100.66.0.6',                'server',    820,   80, {size:22, fontSize:10}),
+    mkNode('pos-ag1000',      'AG1000\n10.65.0.149',             'switch',    820,  220, {size:22, fontSize:10}),
   ];
 }
 
