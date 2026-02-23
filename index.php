@@ -1222,6 +1222,75 @@ const _defaultNodes = visNodes.get();
 const _defaultEdges = visEdges.get();
 const _defaultDeviceData = JSON.parse(JSON.stringify(deviceData));
 
+// ═══════════════════════════════════════════════════════════
+//  POS MAP — Built-in combined map (Asia + Zain + Passport)
+// ═══════════════════════════════════════════════════════════
+const _posmapDeviceData = {
+  'pos-asia-wan':     {name:'Asia Link P2P',    role:'WAN / P2P Link — Asia ISP',       ip:'172.22.223.130', type:'wan',      status:'ok', ifaces:['Gig 1/0/7 → InternetSwitch'],              info:{Tunnel:'T7-T2AsiaPri','FGT-WAN-IP':'172.22.223.129',Type:'P2P Leased Line'}},
+  'pos-zain-wan':     {name:'Zain Link P2P',    role:'WAN / P2P Link — Zain ISP',        ip:'10.106.23.193',  type:'wan',      status:'ok', ifaces:['Gi1/0/28 → InternetSwitch'],               info:{Tunnel:'T10-T2Zain',  'FGT-WAN-IP':'10.106.23.194', Type:'P2P Leased Line'}},
+  'pos-passport-wan': {name:'Passport Link P2P',role:'WAN / P2P Link — Passport ISP',   ip:'172.17.252.9',   type:'wan',      status:'ok', ifaces:['Te1/1/3 → InternetSwitch'],                info:{Tunnel:'T2-SSTTa',    'FGT-WAN-IP':'172.17.252.14', Type:'P2P Leased Line'}},
+  'pos-inet-sw':      {name:'Internet Switch',  role:'L3 Edge Switching',                ip:'10.1.0.15',      type:'switch',   status:'ok', ifaces:['Gig 1/0/7 ← Asia','Gi1/0/28 ← Zain','Te1/1/3 ← Passport','Po10 → CoreSwitch'], info:{Model:'Cisco Switch'}},
+  'pos-core-sw':      {name:'Core Switch',      role:'L3 Core Distribution',             ip:'10.1.0.5',       type:'switch',   status:'ok', ifaces:['Po10 ← InternetSwitch','Po12 → FGT'],       info:{Model:'Cisco CoreSwitch',VLAN:'POS'}},
+  'pos-fgt':          {name:'FGT Edge Firewall',role:'Next-Gen Firewall (Multi-WAN)',    ip:'10.1.0.1',       type:'firewall', status:'ok', ifaces:['UPLINK/Po10 ← CoreSwitch','T7-T2AsiaPri (172.22.223.129)','T10-T2Zain (10.106.23.194)','T2-SSTTa (172.17.252.14)','Port 3 → FTD'], info:{Model:'FortiGate',Tunnels:'Asia / Zain / Passport',Mode:'Multi-WAN'}},
+  'pos-ftd':          {name:'FTD',              role:'Firepower Threat Defense IPS',    ip:'100.65.0.241',   type:'firewall', status:'ok', ifaces:['port 3 ← FGT','Eth1/47 → TOR1','vlan20'],     info:{Model:'Cisco FTD',VLAN:'20'}},
+  'pos-tor1':         {name:'TOR 1',            role:'Top-of-Rack Switch',              ip:'10.1.0.7',       type:'switch',   status:'ok', ifaces:['Eth1/47 ← FTD','Eth1/37 → TOR-LAN1','Eth1/40 → F5','Po20 → SVLP / SVFE'], info:{Model:'Cisco Nexus'}},
+  'pos-tor-lan1':     {name:'TOR-LAN 1',        role:'TOR LAN Access Switch',           ip:'10.1.0.81',      type:'switch',   status:'ok', ifaces:['Te1/1/1 ← TOR1','→ AG1000'],                 info:{Model:'Cisco Catalyst'}},
+  'pos-ag1000':       {name:'AG1000',           role:'Aggregation Router',              ip:'10.65.0.149',    type:'switch',   status:'ok', ifaces:['← TOR-LAN1'],                                info:{Model:'AG1000'}},
+  'pos-svlp':         {name:'SVLP',             role:'POS Application Server',          ip:'100.66.0.3',     type:'server',   status:'ok', ifaces:['Po20 ← TOR1'],                               info:{Role:'SVLP'}},
+  'pos-f5':           {name:'F5',               role:'Load Balancer',                   ip:'10.1.0.11',      type:'f5',       status:'ok', ifaces:['Eth1/40 ← TOR1'],                            info:{Model:'F5 BIG-IP'}},
+  'pos-svfe':         {name:'SVFE',             role:'POS Frontend Application Server', ip:'100.66.0.6',     type:'server',   status:'ok', ifaces:['Po20 ← TOR1'],                               info:{Role:'SVFE'}},
+};
+
+function buildPosmapNodes(){
+  return [
+    // ── WAN / ISP layer (top, spread horizontally)
+    mkNode('pos-asia-wan',    'Asia Link P2P\n172.22.223.130',   'wan',      -500, -560, {size:24, fontSize:10}),
+    mkNode('pos-zain-wan',    'Zain Link P2P\n10.106.23.193',    'wan',         0, -560, {size:24, fontSize:10}),
+    mkNode('pos-passport-wan','Passport Link P2P\n172.17.252.9', 'wan',       500, -560, {size:24, fontSize:10}),
+    // ── Internet Switch (shared)
+    mkNode('pos-inet-sw',     'Internet Switch\n10.1.0.15',      'switch',      0, -370, {size:32, fontSize:12}),
+    // ── Core Switch (shared)
+    mkNode('pos-core-sw',     'Core Switch\n10.1.0.5',           'switch',      0, -180, {size:32, fontSize:12}),
+    // ── FortiGate (multi-WAN, shared)
+    mkNode('pos-fgt',         'FGT Edge FW\n10.1.0.1',           'firewall',    0,   10, {size:30, fontSize:11}),
+    // ── FTD (shared)
+    mkNode('pos-ftd',         'FTD\n100.65.0.241',               'firewall',    0,  200, {size:28, fontSize:11}),
+    // ── TOR switches
+    mkNode('pos-tor1',        'TOR 1\n10.1.0.7',                 'switch',    220,  390, {size:28, fontSize:11}),
+    mkNode('pos-tor-lan1',    'TOR-LAN 1\n10.1.0.81',            'switch',   -220,  390, {size:28, fontSize:11}),
+    // ── End devices
+    mkNode('pos-ag1000',      'AG1000\n10.65.0.149',             'switch',   -220,  580, {size:22, fontSize:10}),
+    mkNode('pos-svlp',        'SVLP\n100.66.0.3',                'server',     30,  580, {size:22, fontSize:10}),
+    mkNode('pos-f5',          'F5\n10.1.0.11',                   'f5',        220,  580, {size:22, fontSize:10}),
+    mkNode('pos-svfe',        'SVFE\n100.66.0.6',                'server',    420,  580, {size:22, fontSize:10}),
+  ];
+}
+
+function buildPosmapEdges(){
+  return [
+    // ── ISP → InternetSwitch
+    mkEdge('pos-asia-wan',    'pos-inet-sw', '#00bcd4', {width:2, label:'Gig 1/0/7',  font:{color:'#00bcd4', size:9, background:'rgba(10,14,26,.9)'}}),
+    mkEdge('pos-zain-wan',    'pos-inet-sw', '#00bcd4', {width:2, label:'Gi1/0/28',   font:{color:'#00bcd4', size:9, background:'rgba(10,14,26,.9)'}}),
+    mkEdge('pos-passport-wan','pos-inet-sw', '#00bcd4', {width:2, label:'Te1/1/3',    font:{color:'#00bcd4', size:9, background:'rgba(10,14,26,.9)'}}),
+    // ── InternetSwitch → CoreSwitch
+    mkEdge('pos-inet-sw',  'pos-core-sw', '#3498db', {width:4, label:'Po10', font:{color:'#3498db', size:9, background:'rgba(10,14,26,.9)'}}),
+    // ── CoreSwitch → FGT
+    mkEdge('pos-core-sw',  'pos-fgt',     '#e74c3c', {width:3, label:'Po12 / FGT-EDG UPLINK', font:{color:'#e74c3c', size:9, background:'rgba(10,14,26,.9)'}}),
+    // ── FGT → FTD
+    mkEdge('pos-fgt',      'pos-ftd',     '#e74c3c', {width:3, label:'Port 3', font:{color:'#e74c3c', size:9, background:'rgba(10,14,26,.9)'}}),
+    // ── FTD → TOR1
+    mkEdge('pos-ftd',      'pos-tor1',    '#3498db', {width:4, label:'Eth1/47 / vlan20', font:{color:'#3498db', size:9, background:'rgba(10,14,26,.9)'}}),
+    // ── TOR1 → TOR-LAN1
+    mkEdge('pos-tor1',     'pos-tor-lan1','#3498db', {width:3, label:'Eth1/37 ↔ Te1/1/1', font:{color:'#3498db', size:9, background:'rgba(10,14,26,.9)'}}),
+    // ── TOR-LAN1 → AG1000
+    mkEdge('pos-tor-lan1', 'pos-ag1000',  '#78909c', {width:2}),
+    // ── TOR1 → SVLP / F5 / SVFE
+    mkEdge('pos-tor1',     'pos-svlp',    '#1abc9c', {width:2, label:'Po20',   font:{color:'#1abc9c', size:9, background:'rgba(10,14,26,.9)'}}),
+    mkEdge('pos-tor1',     'pos-f5',      '#2ecc71', {width:2, label:'Eth1/40',font:{color:'#2ecc71', size:9, background:'rgba(10,14,26,.9)'}}),
+    mkEdge('pos-tor1',     'pos-svfe',    '#1abc9c', {width:2, label:"Po20",   font:{color:'#1abc9c', size:9, background:'rgba(10,14,26,.9)'}}),
+  ];
+}
+
 // Save positions on drag
 visNetwork.on('dragEnd', p => { if(p.nodes.length) savePositions(); });
 
@@ -2017,12 +2086,13 @@ async function loadMaps(){
   const container=document.getElementById('map-list');
   // Keep the default "Network Map" item (mapid=0)
   const defaultItem=`<div class="map-list-item${S.currentMapId===0?' active-map':''}" data-mapid="0" onclick="switchMap(0,'Network Map')"><span>🗺️</span><span>Network Map</span></div>`;
+  const posmapItem=`<div class="map-list-item${S.currentMapId===-1?' active-map':''}" data-mapid="-1" onclick="switchMap(-1,'POS MAP')"><span>🗺️</span><span>POS MAP</span></div>`;
   const imported=layouts.map(l=>`
     <div class="map-list-item${S.currentMapId==l.id?' active-map':''}" data-mapid="${l.id}" onclick="switchMap(${l.id},'${l.name.replace(/'/g,"\\'")}')">
       <span>🗺</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${l.name}</span>
       <span class="map-del" onclick="deleteMap(event,${l.id})">✕</span>
     </div>`).join('');
-  container.innerHTML=defaultItem+imported;
+  container.innerHTML=defaultItem+posmapItem+imported;
 }
 
 async function switchMap(id, name){
@@ -2047,6 +2117,24 @@ async function switchMap(id, name){
     navigate('map');
     document.getElementById('page-title').textContent='Network Map';
     setTimeout(()=>visNetwork.fit({animation:{duration:500}}),100);
+    updateMapStatus();
+    renderHosts();
+    renderAlarms();
+    return;
+  }
+  if(id===-1){
+    // Load built-in POS MAP (Asia + Zain + Passport combined)
+    visNodes.clear(); visEdges.clear();
+    visNodes.add(buildPosmapNodes());
+    visEdges.add(buildPosmapEdges());
+    Object.keys(deviceData).forEach(k=>delete deviceData[k]);
+    Object.assign(deviceData, JSON.parse(JSON.stringify(_posmapDeviceData)));
+    S.nodeHostMap={};
+    S.currentMapHostIds=new Set();
+    saveNodeHostMap();
+    navigate('map');
+    document.getElementById('page-title').textContent='POS MAP';
+    setTimeout(()=>visNetwork.fit({animation:{duration:600}}),100);
     updateMapStatus();
     renderHosts();
     renderAlarms();
