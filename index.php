@@ -1076,42 +1076,44 @@ const S = {
 //  DEFAULT DEVICE DATA (built-in nodes)
 // ═══════════════════════════════════════════════════════════
 const deviceData = {
-  visa:       {name:'VISA Network',role:'External Payment Network',ip:'External',type:'external',status:'ok',ifaces:['P2P Link'],info:{Protocol:'ISO 8583',Auth:'VisaNet'}},
-  mc:         {name:'MasterCard',role:'External Payment Network',ip:'External',type:'external',status:'ok',ifaces:['MC Switch P14'],info:{Protocol:'ISO 8583'}},
-  cbi:        {name:'CBI — Central Bank Iraq',role:'Regulatory Authority',ip:'External',type:'external',status:'ok',ifaces:['CBI SW'],info:{Protocol:'SWIFT'}},
-  isp:        {name:'ISP Uplink',role:'Internet Service Provider',ip:'204.106.240.53',type:'external',status:'ok',ifaces:['ScopeSky','Passport-SS'],info:{Provider:'ScopeSky / Passport'}},
-  dr:         {name:'DR Site',role:'Disaster Recovery',ip:'Remote',type:'infra',status:'info',ifaces:['P2P'],info:{Mode:'Active-Passive',RPO:'4hr',RTO:'8hr'}},
-  scopesky:   {name:'ScopeSky ISP',role:'WAN / P2P Link',ip:'204.106.240.53',type:'wan',status:'ok',ifaces:['To Internet-SW'],info:{Type:'Fiber'}},
-  'passport-ss':{name:'PassPort LocalSS',role:'WAN / P2P Link',ip:'Private',type:'wan',status:'ok',ifaces:['To Internet-SW'],info:{Type:'MPLS'}},
-  'asia-local':{name:'Asia Local',role:'WAN / P2P Link',ip:'Private',type:'wan',status:'ok',ifaces:['To Internet-SW'],info:{Type:'Leased Line'}},
-  'zain-m2m': {name:'Zain M2M',role:'M2M / IoT Network',ip:'Private',type:'wan',status:'ok',ifaces:['To Internet-SW'],info:{Type:'4G/LTE',Devices:'389'}},
-  'mc-sw':    {name:'MC Switch',role:'MasterCard Switch P14',ip:'Internal',type:'wan',status:'ok',ifaces:['P14 → Internet-SW'],info:{}},
-  'cbi-sw':   {name:'CBI Switch',role:'Central Bank Switch',ip:'Internal',type:'wan',status:'ok',ifaces:['To Internet-SW'],info:{}},
-  'inet-sw':  {name:'Internet Switch',role:'L3 Edge Switching',ip:'10.1.0.15',type:'switch',status:'ok',ifaces:['Gi5/0/1 → Core-SW'],info:{Model:'Cisco 6800'}},
-  'core-sw':  {name:'Core Switch',role:'L3 Core Distribution',ip:'10.1.0.5',type:'switch',status:'ok',ifaces:['→ Payment FW × 2'],info:{Model:'Catalyst 6800',VLAN:'Payment,Mgmt'}},
-  'pmt-fw1':  {name:'FortiGate 601 — Primary',role:'Next-Gen Firewall (Active)',ip:'10.1.0.2',type:'firewall',status:'ok',ifaces:['PORT1 ← Core','PORT2 → FP1','HA'],info:{Model:'FortiGate 601E',Mode:'HA Active',IPS:'Enabled'}},
-  'pmt-fw2':  {name:'FortiGate 601 — Secondary',role:'Next-Gen Firewall (Passive)',ip:'10.1.0.3',type:'firewall',status:'ok',ifaces:['PORT1 ← Core','PORT2 → FP2','HA'],info:{Model:'FortiGate 601E',Mode:'HA Passive'}},
-  fp1:        {name:'Cisco Firepower 1',role:'IPS / NGIPS (Active)',ip:'10.1.1.1',type:'firewall',status:'ok',ifaces:['Eth1/15 ← FG1','Eth1/47 → TOR1'],info:{Model:'FP 4150',Mode:'HA Active',IPS:'Snort 3'}},
-  fp2:        {name:'Cisco Firepower 2',role:'IPS / NGIPS (Passive)',ip:'10.1.1.2',type:'firewall',status:'ok',ifaces:['Eth1/15 ← FG2','Eth1/47 → TOR2'],info:{Model:'FP 4150',Mode:'HA Passive'}},
-  tor1:       {name:'NXOS TOR Switch 1',role:'Top-of-Rack VPC Primary',ip:'10.1.2.1',type:'switch',status:'ok',ifaces:['Eth1/47 ← FP1','Eth1/11 → Palo','Eth1/36 → F5'],info:{Model:'Nexus 93xx',VPC:'Primary'}},
-  tor2:       {name:'NXOS TOR Switch 2',role:'Top-of-Rack VPC Secondary',ip:'10.1.2.2',type:'switch',status:'ok',ifaces:['Eth1/47 ← FP2','Eth1/36 → F5','Eth1/3-7 → HSM'],info:{Model:'Nexus 93xx',VPC:'Secondary'}},
-  palo1:      {name:'Palo Alto — Unit 1',role:'App-Layer FW (Active)',ip:'10.1.3.1',type:'palo',status:'ok',ifaces:['Eth1/11 ← TOR'],info:{Model:'PA-5250',Mode:'HA Active',AppID:'Enabled'}},
-  palo2:      {name:'Palo Alto — Unit 2',role:'App-Layer FW (Passive)',ip:'10.1.3.2',type:'palo',status:'ok',ifaces:['Eth1/11 ← TOR'],info:{Model:'PA-5250',Mode:'HA Passive'}},
-  'f5-1':     {name:'F5 BIG-IP LTM 1',role:'Load Balancer (Active)',ip:'10.1.0.11',type:'f5',status:'ok',ifaces:['Eth1/36 ← TOR1','→ Servers'],info:{Model:'i7800',Mode:'HA Active',SSL:'Offload'}},
-  'f5-2':     {name:'F5 BIG-IP LTM 2',role:'Load Balancer (Passive)',ip:'10.1.0.12',type:'f5',status:'ok',ifaces:['Eth1/36 ← TOR2'],info:{Model:'i7800',Mode:'HA Passive'}},
-  ag1000:     {name:'AG1000 Router',role:'Aggregation Router',ip:'10.1.2.100',type:'switch',status:'ok',ifaces:['← TOR2'],info:{Model:'AG1000'}},
-  'web-servers':{name:'WEB Servers Cluster',role:'Payment Application Servers',ip:'10.100.x.x',type:'server',status:'ok',ifaces:['← TOR1+2','← F5 VIP'],info:{OS:'RHEL 8',Instances:'4×',Cluster:'Active-Active'}},
-  'db-servers': {name:'DB Servers Cluster',role:'Payment Database Servers',ip:'10.200.x.x',type:'dbserver',status:'ok',ifaces:['← TOR1+2','← F5 VIP'],info:{DB:'Oracle RAC / MS SQL',Mode:'HA Active-Active'}},
-  'hsm-auth1':{name:'HSM-Auth-1',role:'Authentication HSM',ip:'100.66.0.122',type:'hsm',status:'ok',ifaces:['← TOR2'],info:{Model:'Thales payShield 10K',Function:'PIN/Key Mgmt',FIPS:'140-2 L3'}},
-  'hsm-auth2':{name:'HSM-Auth-2',role:'Authentication HSM',ip:'100.66.0.123',type:'hsm',status:'ok',ifaces:['Eth1/3 ← TOR2'],info:{Model:'Thales payShield 10K',Function:'PIN/Key Mgmt',FIPS:'140-2 L3'}},
-  'hsm-acs1': {name:'HSM-ACS-1',role:'Access Control Server HSM',ip:'100.66.0.124',type:'hsm',status:'ok',ifaces:['Eth1/4 ← TOR2'],info:{Model:'Thales payShield',Function:'EMV ACS',FIPS:'140-2 L3'}},
-  'hsm-acs2': {name:'HSM-ACS-2',role:'Access Control Server HSM',ip:'100.66.0.125',type:'hsm',status:'ok',ifaces:['Eth1/5 ← TOR2'],info:{Model:'Thales payShield',Function:'EMV ACS',FIPS:'140-2 L3'}},
-  veeam:      {name:'VeeamSRV',role:'Backup Server',ip:'10.50.0.10',type:'infra',status:'ok',ifaces:['Eth1/43 ← TOR1'],info:{Software:'Veeam B&R v12'}},
-  olvm:       {name:'OLVM Manager',role:'Oracle Linux Virt Mgr',ip:'10.50.0.20',type:'infra',status:'ok',ifaces:['Eth1/39 ← TOR1'],info:{Platform:'OLVM 4.5',Hosts:'8 hypervisors'}},
-  'hv-prod':  {name:'HV-PROD',role:'Hyper-V Production Host',ip:'10.50.0.30',type:'infra',status:'ok',ifaces:['Eth1/30 ← TOR1'],info:{Platform:'Hyper-V 2022'}},
-  hnv03:      {name:'HNV03',role:'Hyper-V Node 3',ip:'10.50.0.33',type:'infra',status:'ok',ifaces:['Eth1/26 ← TOR1'],info:{}},
-  hnv04:      {name:'HNV04',role:'Hyper-V Node 4',ip:'10.50.0.34',type:'infra',status:'ok',ifaces:['Eth1/24 ← TOR2'],info:{}},
-  'perso-fiber':{name:'Perso-Fiber',role:'Personalization Fiber Channel',ip:'10.50.0.40',type:'infra',status:'ok',ifaces:['Eth1/32 ← TOR1'],info:{Type:'FC SAN'}},
+  visa:           {name:'VISA Network',role:'External Payment Network',ip:'185.76.35.129',type:'external',status:'ok',ifaces:['P2P Link'],info:{Protocol:'ISO 8583',Auth:'VisaNet'}},
+  mc:             {name:'MasterCard',role:'External Payment Network',ip:'10.92.46.55',type:'external',status:'ok',ifaces:['MC Switch P14'],info:{Protocol:'ISO 8583'}},
+  cbi:            {name:'CBI — Central Bank Iraq',role:'Regulatory Authority',ip:'172.29.222.10',type:'external',status:'ok',ifaces:['CBI SW'],info:{Protocol:'SWIFT'}},
+  isp:            {name:'ISP Uplink',role:'Internet Service Provider',ip:'204.106.240.53',type:'external',status:'ok',ifaces:['ScopeSky','Passport-SS'],info:{Provider:'ScopeSky / Passport'}},
+  dr:             {name:'DR Site',role:'Disaster Recovery',ip:'100.127.40.2',type:'infra',status:'info',ifaces:['P2P'],info:{Mode:'Active-Passive',RPO:'4hr',RTO:'8hr'}},
+  scopesky:       {name:'ScopeSky ISP',role:'WAN / P2P Link',ip:'204.106.240.53',type:'wan',status:'ok',ifaces:['To Internet-SW'],info:{Type:'Fiber'}},
+  'passport-ss':  {name:'PassPort LocalSS',role:'WAN / P2P Link',ip:'10.130.200.103',type:'wan',status:'ok',ifaces:['To Internet-SW'],info:{Type:'MPLS'}},
+  'asia-local':   {name:'Asia Local',role:'WAN / P2P Link',ip:'172.22.223.130',type:'wan',status:'ok',ifaces:['To Internet-SW'],info:{Type:'Leased Line'}},
+  'zain-m2m':     {name:'Zain M2M',role:'M2M / IoT Network',ip:'151.236.160.30',type:'wan',status:'ok',ifaces:['To Internet-SW'],info:{Type:'4G/LTE'}},
+  'mc-sw':        {name:'MC Switch',role:'MasterCard Switch P14',ip:'Internal',type:'wan',status:'ok',ifaces:['P14 → Internet-SW'],info:{}},
+  'cbi-sw':       {name:'CBI Switch',role:'Central Bank Switch',ip:'Internal',type:'wan',status:'ok',ifaces:['To Internet-SW'],info:{}},
+  'inet-sw':      {name:'Internet Switch',role:'L3 Edge Switching',ip:'10.1.0.15',type:'switch',status:'ok',ifaces:['Gi5/0/1 → Core-SW'],info:{Model:'Cisco 6800'}},
+  'core-sw':      {name:'Core Switch',role:'L3 Core Distribution',ip:'10.1.0.5',type:'switch',status:'ok',ifaces:['→ Payment FW × 2'],info:{Model:'Catalyst 6800',VLAN:'Payment,Mgmt'}},
+  'pmt-fw1':      {name:'FortiGate 601 — Primary',role:'Next-Gen Firewall (Active)',ip:'10.1.0.2',type:'firewall',status:'ok',ifaces:['PORT1 ← Core','PORT2 → FP1','HA'],info:{Model:'FortiGate 601E',Mode:'HA Active',IPS:'Enabled'}},
+  'pmt-fw2':      {name:'FortiGate 601 — Secondary',role:'Next-Gen Firewall (Passive)',ip:'10.1.0.3',type:'firewall',status:'ok',ifaces:['PORT1 ← Core','PORT2 → FP2','HA'],info:{Model:'FortiGate 601E',Mode:'HA Passive'}},
+  fp1:            {name:'Cisco Firepower 1',role:'IPS / NGIPS (Active)',ip:'10.1.0.4',type:'firewall',status:'ok',ifaces:['Eth1/15 ← FG1','Eth1/47 → TOR1'],info:{Model:'FP 4150',Mode:'HA Active',IPS:'Snort 3'}},
+  fp2:            {name:'Cisco Firepower 2',role:'IPS / NGIPS (Passive)',ip:'10.1.0.6',type:'firewall',status:'ok',ifaces:['Eth1/15 ← FG2','Eth1/47 → TOR2'],info:{Model:'FP 4150',Mode:'HA Passive'}},
+  tor1:           {name:'NXOS TOR Switch 1',role:'Top-of-Rack VPC Primary',ip:'10.1.0.7',type:'switch',status:'ok',ifaces:['Eth1/47 ← FP1','Eth1/11 → Palo','Eth1/36 → F5'],info:{Model:'Nexus 93xx',VPC:'Primary'}},
+  tor2:           {name:'NXOS TOR Switch 2',role:'Top-of-Rack VPC Secondary',ip:'10.1.0.8',type:'switch',status:'ok',ifaces:['Eth1/47 ← FP2','Eth1/36 → F5','Eth1/3-7 → HSM'],info:{Model:'Nexus 93xx',VPC:'Secondary'}},
+  palo1:          {name:'Palo Alto — Unit 1',role:'App-Layer FW (Active)',ip:'10.1.0.13',type:'palo',status:'ok',ifaces:['Eth1/11 ← TOR'],info:{Model:'PA-5250',Mode:'HA Active',AppID:'Enabled'}},
+  palo2:          {name:'Palo Alto — Unit 2',role:'App-Layer FW (Passive)',ip:'10.1.0.14',type:'palo',status:'ok',ifaces:['Eth1/11 ← TOR'],info:{Model:'PA-5250',Mode:'HA Passive'}},
+  'f5-1':         {name:'F5 BIG-IP LTM 1',role:'Load Balancer (Active)',ip:'10.1.0.11',type:'f5',status:'ok',ifaces:['Eth1/36 ← TOR1','→ Servers'],info:{Model:'i7800',Mode:'HA Active',SSL:'Offload'}},
+  'f5-2':         {name:'F5 BIG-IP LTM 2',role:'Load Balancer (Passive)',ip:'10.1.0.12',type:'f5',status:'ok',ifaces:['Eth1/36 ← TOR2'],info:{Model:'i7800',Mode:'HA Passive'}},
+  ag1000:         {name:'AG1000 Router',role:'Aggregation Router',ip:'100.64.2.68',type:'switch',status:'ok',ifaces:['← TOR2'],info:{Model:'AG1000'}},
+  'web-servers':  {name:'WEB Servers Cluster',role:'Payment Application Servers',ip:'10.100.x.x',type:'server',status:'ok',ifaces:['← TOR1+2','← F5 VIP'],info:{OS:'RHEL 8',Instances:'4×',Cluster:'Active-Active'}},
+  'db-servers':   {name:'DB Servers Cluster',role:'Payment Database Servers',ip:'10.200.x.x',type:'dbserver',status:'ok',ifaces:['← TOR1+2','← F5 VIP'],info:{DB:'Oracle RAC / MS SQL',Mode:'HA Active-Active'}},
+  'hsm-auth1':    {name:'HSM-Auth-1',role:'Authentication HSM',ip:'100.66.0.122',type:'hsm',status:'ok',ifaces:['← TOR2'],info:{Model:'Thales payShield 10K',Function:'PIN/Key Mgmt',FIPS:'140-2 L3'}},
+  'hsm-auth2':    {name:'HSM-Auth-2',role:'Authentication HSM',ip:'100.66.0.123',type:'hsm',status:'ok',ifaces:['Eth1/3 ← TOR2'],info:{Model:'Thales payShield 10K',Function:'PIN/Key Mgmt',FIPS:'140-2 L3'}},
+  'hsm-acs1':     {name:'HSM-ACS-1',role:'Access Control Server HSM',ip:'100.66.0.124',type:'hsm',status:'ok',ifaces:['Eth1/4 ← TOR2'],info:{Model:'Thales payShield',Function:'EMV ACS',FIPS:'140-2 L3'}},
+  'hsm-acs2':     {name:'HSM-ACS-2',role:'Access Control Server HSM',ip:'100.66.0.125',type:'hsm',status:'ok',ifaces:['Eth1/5 ← TOR2'],info:{Model:'Thales payShield',Function:'EMV ACS',FIPS:'140-2 L3'}},
+  veeam:          {name:'VeeamSRV',role:'Backup Server',ip:'100.65.0.247',type:'infra',status:'ok',ifaces:['Eth1/43 ← TOR1'],info:{Software:'Veeam B&R v12'}},
+  olvm:           {name:'OLVM Manager',role:'Oracle Linux Virt Mgr',ip:'10.1.0.25',type:'infra',status:'ok',ifaces:['Eth1/39 ← TOR1'],info:{Platform:'OLVM 4.5',Hosts:'8 hypervisors'}},
+  'hv-prod':      {name:'HV-PROD',role:'Hyper-V Production Host',ip:'10.1.0.21',type:'infra',status:'ok',ifaces:['Eth1/30 ← TOR1'],info:{Platform:'Hyper-V 2022'}},
+  hnv03:          {name:'HNV03',role:'Hyper-V Node 3',ip:'10.50.0.33',type:'infra',status:'ok',ifaces:['Eth1/26 ← TOR1'],info:{}},
+  hnv04:          {name:'HNV04',role:'Hyper-V Node 4',ip:'10.50.0.34',type:'infra',status:'ok',ifaces:['Eth1/24 ← TOR2'],info:{}},
+  'perso-fiber':  {name:'Perso-Fiber',role:'Personalization Fiber Channel',ip:'10.50.0.40',type:'infra',status:'ok',ifaces:['Eth1/32 ← TOR1'],info:{Type:'FC SAN'}},
+  'storeonce-01': {name:'StoreOnce-01',role:'HPE StoreOnce Backup',ip:'100.64.2.43',type:'infra',status:'ok',ifaces:['← TOR1'],info:{Model:'HPE StoreOnce'}},
+  'storeonce-02': {name:'StoreOnce-02',role:'HPE StoreOnce Backup',ip:'100.64.2.44',type:'infra',status:'ok',ifaces:['← TOR2'],info:{Model:'HPE StoreOnce'}},
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -1166,6 +1168,8 @@ const visNodes = new vis.DataSet([
   mkNode('hnv03','HNV03','infra',1200,320,{size:18,fontSize:9}),
   mkNode('hnv04','HNV04','infra',1200,400,{size:18,fontSize:9}),
   mkNode('perso-fiber','Perso-Fiber','infra',1200,480,{size:18,fontSize:9}),
+  mkNode('storeonce-01','StoreOnce-01\n100.64.2.43','infra',1200,560,{size:18,fontSize:9}),
+  mkNode('storeonce-02','StoreOnce-02\n100.64.2.44','infra',1200,640,{size:18,fontSize:9}),
 ]);
 
 const visEdges = new vis.DataSet([
@@ -1211,6 +1215,8 @@ const visEdges = new vis.DataSet([
   mkEdge('tor1','hnv03','#78909c',{width:1,label:'Eth1/26',font:{color:'#55555599',size:8,background:'rgba(10,14,26,.9)'}}),
   mkEdge('tor1','perso-fiber','#78909c',{width:1,label:'Eth1/32',font:{color:'#55555599',size:8,background:'rgba(10,14,26,.9)'}}),
   mkEdge('tor2','hnv04','#78909c',{width:1,label:'Eth1/24',font:{color:'#55555599',size:8,background:'rgba(10,14,26,.9)'}}),
+  mkEdge('tor1','storeonce-01','#78909c',{width:1,font:{color:'#55555599',size:8,background:'rgba(10,14,26,.9)'}}),
+  mkEdge('tor2','storeonce-02','#78909c',{width:1,font:{color:'#55555599',size:8,background:'rgba(10,14,26,.9)'}}),
 ]);
 
 const visNetwork = new vis.Network(document.getElementById('vis-network'), {nodes:visNodes,edges:visEdges}, {
@@ -1718,28 +1724,37 @@ function saveNodeHostMap(){
 }
 // Default node → Zabbix host mappings (verified against zabbix.tabadul.iq)
 const DEFAULT_NODE_HOST_MAP = {
-  'inet-sw':   '10785',  // INT-SW            10.1.0.15
-  'core-sw':   '10929',  // CoreSwitch        10.1.0.5
-  'pmt-fw1':   '10907',  // Fortigate FW      10.1.0.1
-  'pmt-fw2':   '11108',  // Fortigate FW 2    10.1.0.202
-  'fp1':       '10839',  // FTD-1 (Firepower) 10.1.0.4
-  'fp2':       '10840',  // FTD-2             10.1.0.6
-  'tor1':      '10898',  // Tor-1             10.1.0.7
-  'tor2':      '10899',  // Tor-2             10.1.0.8
-  'palo1':     '10832',  // PA-1              10.1.0.13
-  'palo2':     '10831',  // PA-2              10.1.0.14
-  'f5-1':      '10830',  // F5-1              10.1.0.11
-  'f5-2':      '10829',  // F5-2              10.1.0.12
-  'hsm-auth1': '10875',  // HSM-Auth-1        100.66.0.122
-  'hsm-auth2': '10876',  // HSM-Auth-2        100.66.0.123
-  'hsm-acs1':  '10877',  // HSM-ACS-1         100.66.0.124
-  'hsm-acs2':  '10878',  // HSM-ACS-2         100.66.0.125
-  'ag1000':    '10871',  // AG-01 (AG1000)    100.64.2.68
-  'olvm':      '10776',  // MGM - OLVM        10.1.0.25
-  'scopesky':  '10906',  // ScopeSky-Public   204.106.240.53
-  'dr':        '10900',  // DR-Monitor        100.127.40.2
-  'veeam':     '10841',  // ITP-e01-veeam     100.65.0.247
-  'hv-prod':   '10778',  // MGM-HVN-PROD01    10.1.0.21
+  'visa':         '10972',  // VISA Network      185.76.35.129
+  'mc':           '10833',  // MasterCard        10.92.46.55
+  'cbi':          '10922',  // CBI               172.29.222.10
+  'isp':          '10906',  // ISP Uplink        204.106.240.53
+  'scopesky':     '10906',  // ScopeSky-Public   204.106.240.53
+  'passport-ss':  '10848',  // PassPort LocalSS  10.130.200.103
+  'asia-local':   '10861',  // Asia Local        172.22.223.130
+  'zain-m2m':     '11124',  // Zain M2M          151.236.160.30
+  'dr':           '10900',  // DR-Monitor        100.127.40.2
+  'inet-sw':      '10785',  // INT-SW            10.1.0.15
+  'core-sw':      '10929',  // CoreSwitch        10.1.0.5
+  'pmt-fw1':      '10907',  // Fortigate FW      10.1.0.2
+  'pmt-fw2':      '11108',  // Fortigate FW 2    10.1.0.3
+  'fp1':          '10839',  // FTD-1 (Firepower) 10.1.0.4
+  'fp2':          '10840',  // FTD-2             10.1.0.6
+  'tor1':         '10898',  // Tor-1             10.1.0.7
+  'tor2':         '10899',  // Tor-2             10.1.0.8
+  'palo1':        '10832',  // PA-1              10.1.0.13
+  'palo2':        '10831',  // PA-2              10.1.0.14
+  'f5-1':         '10830',  // F5-1              10.1.0.11
+  'f5-2':         '10829',  // F5-2              10.1.0.12
+  'ag1000':       '10871',  // AG-01 (AG1000)    100.64.2.68
+  'hsm-auth1':    '10875',  // HSM-Auth-1        100.66.0.122
+  'hsm-auth2':    '10876',  // HSM-Auth-2        100.66.0.123
+  'hsm-acs1':     '10877',  // HSM-ACS-1         100.66.0.124
+  'hsm-acs2':     '10878',  // HSM-ACS-2         100.66.0.125
+  'veeam':        '10841',  // ITP-e01-veeam     100.65.0.247
+  'olvm':         '10776',  // MGM - OLVM        10.1.0.25
+  'hv-prod':      '10778',  // MGM-HVN-PROD01    10.1.0.21
+  'storeonce-01': '11088',  // StoreOnce-01      100.64.2.43
+  'storeonce-02': '11089',  // StoreOnce-02      100.64.2.44
 };
 
 function loadNodeHostMap(){
