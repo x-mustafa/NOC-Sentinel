@@ -1235,19 +1235,32 @@ const _defaultDeviceData = JSON.parse(JSON.stringify(deviceData));
 //  POS MAP — Built-in combined map (Asia + Zain + Passport)
 // ═══════════════════════════════════════════════════════════
 const _posmapDeviceData = {
-  'pos-asia-wan':     {name:'Asia Link P2P',    role:'WAN / P2P Link — Asia ISP',       ip:'172.22.223.130', type:'wan',      status:'ok', ifaces:['Gig 1/0/7 → InternetSwitch'],              info:{Tunnel:'T7-T2AsiaPri','FGT-WAN-IP':'172.22.223.129',Type:'P2P Leased Line'}},
-  'pos-zain-wan':     {name:'Zain Link P2P',    role:'WAN / P2P Link — Zain ISP',        ip:'10.106.23.193',  type:'wan',      status:'ok', ifaces:['Gi1/0/28 → InternetSwitch'],               info:{Tunnel:'T10-T2Zain',  'FGT-WAN-IP':'10.106.23.194', Type:'P2P Leased Line'}},
-  'pos-passport-wan': {name:'Passport Link P2P',role:'WAN / P2P Link — Passport ISP',   ip:'172.17.252.9',   type:'wan',      status:'ok', ifaces:['Te1/1/3 → InternetSwitch'],                info:{Tunnel:'T2-SSTTa',    'FGT-WAN-IP':'172.17.252.14', Type:'P2P Leased Line'}},
-  'pos-inet-sw':      {name:'Internet Switch',  role:'L3 Edge Switching',                ip:'10.1.0.15',      type:'switch',   status:'ok', ifaces:['Gig 1/0/7 ← Asia','Gi1/0/28 ← Zain','Te1/1/3 ← Passport','Po10 → CoreSwitch'], info:{Model:'Cisco Switch'}},
-  'pos-core-sw':      {name:'Core Switch',      role:'L3 Core Distribution',             ip:'10.1.0.5',       type:'switch',   status:'ok', ifaces:['Po10 ← InternetSwitch','Po12 → FGT'],       info:{Model:'Cisco CoreSwitch',VLAN:'POS'}},
-  'pos-fgt':          {name:'FGT Edge Firewall',role:'Next-Gen Firewall (Multi-WAN)',    ip:'10.1.0.1',       type:'firewall', status:'ok', ifaces:['UPLINK/Po10 ← CoreSwitch','T7-T2AsiaPri (172.22.223.129)','T10-T2Zain (10.106.23.194)','T2-SSTTa (172.17.252.14)','Port 3 → FTD'], info:{Model:'FortiGate',Tunnels:'Asia / Zain / Passport',Mode:'Multi-WAN'}},
-  'pos-ftd':          {name:'FTD',              role:'Firepower Threat Defense IPS',    ip:'100.65.0.241',   type:'firewall', status:'ok', ifaces:['port 3 ← FGT','Eth1/47 → TOR1','vlan20'],     info:{Model:'Cisco FTD',VLAN:'20'}},
+  'pos-asia-wan':     {name:'Asia Link P2P',    role:'WAN / P2P Link — Asia ISP',      ip:'172.22.223.130', type:'wan',      status:'ok', ifaces:['Gig 1/0/7 → InternetSwitch'],              info:{Tunnel:'T7-T2AsiaPri','FGT-WAN-IP':'172.22.223.129',Type:'P2P Leased Line'}},
+  'pos-zain-wan':     {name:'Zain Link P2P',    role:'WAN / P2P Link — Zain ISP',      ip:'10.106.23.193',  type:'wan',      status:'ok', ifaces:['Gi1/0/28 → InternetSwitch'],               info:{Tunnel:'T10-T2Zain',  'FGT-WAN-IP':'10.106.23.194', Type:'P2P Leased Line'}},
+  'pos-passport-wan': {name:'Passport Link P2P',role:'WAN / P2P Link — Passport ISP',  ip:'172.17.252.9',   type:'wan',      status:'ok', ifaces:['Te1/1/3 → InternetSwitch'],                info:{Tunnel:'T2-SSTTa',    'FGT-WAN-IP':'172.17.252.14', Type:'P2P Leased Line'}},
+  'pos-inet-sw':      {name:'Internet Switch',  role:'L3 Edge Switching',               ip:'10.1.0.15',      type:'switch',   status:'ok', ifaces:['Gig 1/0/7 ← Asia','Gi1/0/28 ← Zain','Te1/1/3 ← Passport','Po10 → CoreSwitch'], info:{Model:'Cisco Switch'}},
+  'pos-core-sw':      {name:'Core Switch',      role:'L3 Core Distribution',            ip:'10.1.0.5',       type:'switch',   status:'ok', ifaces:['Po10 ← InternetSwitch','Po12 → FGT'],       info:{Model:'Cisco CoreSwitch',VLAN:'POS'}},
+  'pos-fgt':          {name:'FGT Edge Firewall',role:'Next-Gen Firewall (Multi-WAN)',   ip:'10.1.0.2',       type:'firewall', status:'ok', ifaces:['UPLINK/Po10 ← CoreSwitch','T7-T2AsiaPri (172.22.223.129)','T10-T2Zain (10.106.23.194)','T2-SSTTa (172.17.252.14)','Port 3 → FTD'], info:{Model:'FortiGate',Tunnels:'Asia / Zain / Passport',Mode:'Multi-WAN'}},
+  'pos-ftd':          {name:'FTD',              role:'Firepower Threat Defense IPS',    ip:'10.1.0.4',       type:'firewall', status:'ok', ifaces:['port 3 ← FGT','Eth1/47 → TOR1','vlan20'],     info:{Model:'Cisco FTD'}},
   'pos-tor1':         {name:'TOR 1',            role:'Top-of-Rack Switch',              ip:'10.1.0.7',       type:'switch',   status:'ok', ifaces:['Eth1/47 ← FTD','Eth1/37 → TOR-LAN1','Eth1/40 → F5','Po20 → SVLP / SVFE'], info:{Model:'Cisco Nexus'}},
   'pos-tor-lan1':     {name:'TOR-LAN 1',        role:'TOR LAN Access Switch',           ip:'10.1.0.81',      type:'switch',   status:'ok', ifaces:['Te1/1/1 ← TOR1','→ AG1000'],                 info:{Model:'Cisco Catalyst'}},
-  'pos-ag1000':       {name:'AG1000',           role:'Aggregation Router',              ip:'10.65.0.149',    type:'switch',   status:'ok', ifaces:['← TOR-LAN1'],                                info:{Model:'AG1000'}},
+  'pos-ag1000':       {name:'AG1000',           role:'Aggregation Router',              ip:'100.64.2.68',    type:'switch',   status:'ok', ifaces:['← TOR-LAN1'],                                info:{Model:'AG1000'}},
   'pos-svlp':         {name:'SVLP',             role:'POS Application Server',          ip:'100.66.0.3',     type:'server',   status:'ok', ifaces:['Po20 ← TOR1'],                               info:{Role:'SVLP'}},
   'pos-f5':           {name:'F5',               role:'Load Balancer',                   ip:'10.1.0.11',      type:'f5',       status:'ok', ifaces:['Eth1/40 ← TOR1'],                            info:{Model:'F5 BIG-IP'}},
   'pos-svfe':         {name:'SVFE',             role:'POS Frontend Application Server', ip:'100.66.0.6',     type:'server',   status:'ok', ifaces:['Po20 ← TOR1'],                               info:{Role:'SVFE'}},
+};
+
+const DEFAULT_POS_NODE_HOST_MAP = {
+  'pos-inet-sw':      '10785',  // Internet Switch   10.1.0.15
+  'pos-core-sw':      '10929',  // Core Switch       10.1.0.5
+  'pos-fgt':          '10907',  // FGT Edge FW       10.1.0.2
+  'pos-ftd':          '10839',  // FTD               10.1.0.4
+  'pos-tor1':         '10898',  // TOR 1             10.1.0.7
+  'pos-tor-lan1':     '10901',  // TOR-LAN 1         10.1.0.81
+  'pos-ag1000':       '10871',  // AG1000            100.64.2.68
+  'pos-svlp':         '10788',  // SVLP              100.66.0.3
+  'pos-f5':           '10830',  // F5                10.1.0.11
+  'pos-svfe':         '10793',  // SVFE              100.66.0.6
 };
 
 function buildPosmapNodes(){
@@ -1261,9 +1274,9 @@ function buildPosmapNodes(){
     // ── Core Switch
     mkNode('pos-core-sw',     'Core Switch\n10.1.0.5',           'switch',   -220,    0, {size:32, fontSize:12}),
     // ── FortiGate (multi-WAN)
-    mkNode('pos-fgt',         'FGT Edge FW\n10.1.0.1',           'firewall',   50,    0, {size:30, fontSize:11}),
+    mkNode('pos-fgt',         'FGT Edge FW\n10.1.0.2',           'firewall',   50,    0, {size:30, fontSize:11}),
     // ── FTD
-    mkNode('pos-ftd',         'FTD\n100.65.0.241',               'firewall',  300,    0, {size:28, fontSize:11}),
+    mkNode('pos-ftd',         'FTD\n10.1.0.4',                   'firewall',  300,    0, {size:28, fontSize:11}),
     // ── TOR switches
     mkNode('pos-tor1',        'TOR 1\n10.1.0.7',                 'switch',    560, -120, {size:28, fontSize:11}),
     mkNode('pos-tor-lan1',    'TOR-LAN 1\n10.1.0.81',            'switch',    560,  120, {size:28, fontSize:11}),
@@ -1271,7 +1284,7 @@ function buildPosmapNodes(){
     mkNode('pos-svlp',        'SVLP\n100.66.0.3',                'server',    820, -220, {size:22, fontSize:10}),
     mkNode('pos-f5',          'F5\n10.1.0.11',                   'f5',        820,  -80, {size:22, fontSize:10}),
     mkNode('pos-svfe',        'SVFE\n100.66.0.6',                'server',    820,   80, {size:22, fontSize:10}),
-    mkNode('pos-ag1000',      'AG1000\n10.65.0.149',             'switch',    820,  220, {size:22, fontSize:10}),
+    mkNode('pos-ag1000',      'AG1000\n100.64.2.68',             'switch',    820,  220, {size:22, fontSize:10}),
   ];
 }
 
@@ -2147,8 +2160,8 @@ async function switchMap(id, name){
     visEdges.add(buildPosmapEdges());
     Object.keys(deviceData).forEach(k=>delete deviceData[k]);
     Object.assign(deviceData, JSON.parse(JSON.stringify(_posmapDeviceData)));
-    S.nodeHostMap={};
-    S.currentMapHostIds=new Set();
+    S.nodeHostMap={...DEFAULT_POS_NODE_HOST_MAP};
+    S.currentMapHostIds=new Set(Object.values(DEFAULT_POS_NODE_HOST_MAP).filter(Boolean));
     saveNodeHostMap();
     navigate('map');
     document.getElementById('page-title').textContent='POS MAP';
