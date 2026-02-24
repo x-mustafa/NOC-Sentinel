@@ -47,6 +47,18 @@ runStep($db, 'map_nodes: add layout_id',
 runStep($db, 'zabbix_config: add claude_key',
     "ALTER TABLE `zabbix_config` ADD COLUMN IF NOT EXISTS `claude_key` TEXT DEFAULT NULL");
 
+// ── 3b. AI Providers: add multi-model keys ────────────────────
+runStep($db, 'zabbix_config: add openai_key',
+    "ALTER TABLE `zabbix_config` ADD COLUMN IF NOT EXISTS `openai_key` TEXT DEFAULT NULL");
+runStep($db, 'zabbix_config: add gemini_key',
+    "ALTER TABLE `zabbix_config` ADD COLUMN IF NOT EXISTS `gemini_key` TEXT DEFAULT NULL");
+runStep($db, 'zabbix_config: add grok_key',
+    "ALTER TABLE `zabbix_config` ADD COLUMN IF NOT EXISTS `grok_key` TEXT DEFAULT NULL");
+runStep($db, 'zabbix_config: add default_ai_provider',
+    "ALTER TABLE `zabbix_config` ADD COLUMN IF NOT EXISTS `default_ai_provider` VARCHAR(20) DEFAULT 'claude'");
+runStep($db, 'zabbix_config: add default_ai_model',
+    "ALTER TABLE `zabbix_config` ADD COLUMN IF NOT EXISTS `default_ai_model` VARCHAR(80) DEFAULT NULL");
+
 // ── 4. Create ldap_config table ──────────────────────────────
 runStep($db, 'ldap_config: create table', "
     CREATE TABLE IF NOT EXISTS `ldap_config` (

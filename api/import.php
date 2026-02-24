@@ -197,4 +197,33 @@ if ($action === 'getkey') {
     jsonOut(['has_key' => !empty($key), 'masked' => $masked]);
 }
 
+// ── SAVE AI PROVIDER KEYS ─────────────────────────────────
+if ($action === 'saveaikeys' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    requireAdmin();
+    $b = json_decode(file_get_contents('php://input'), true) ?? [];
+    $db = getDB();
+    $fields = ['claude_key','openai_key','gemini_key','grok_key','default_ai_provider','default_ai_model'];
+    $sets = []; $vals = [];
+    foreach ($fields as $f) {
+        if (array_key_exists($f, $b)) { $sets[] = "$f=?"; $vals[] = trim($b[$f]??''); }
+    }
+    if ($sets) $db->prepare("UPDATE zabbix_config SET " . implode(',', $sets))->execute($vals);
+    jsonOut(['ok' => true]);
+}
+
+// ── GET AI PROVIDER KEYS (masked) ────────────────────────
+if ($action === 'getaikeys') {
+    $db  = getDB();
+    $cfg = $db->query("SELECT claude_key,openai_key,gemini_key,grok_key,default_ai_provider,default_ai_model FROM zabbix_config LIMIT 1")->fetch(PDO::FETCH_ASSOC) ?: [];
+    $mask = fn($k) => $k ? substr($k,0,8).str_repeat('*',16).substr($k,-4) : '';
+    jsonOut([
+        'claude'   => ['has' => !empty($cfg['claude_key']),   'masked' => $mask($cfg['claude_key']??'')],
+        'openai'   => ['has' => !empty($cfg['openai_key']),   'masked' => $mask($cfg['openai_key']??'')],
+        'gemini'   => ['has' => !empty($cfg['gemini_key']),   'masked' => $mask($cfg['gemini_key']??'')],
+        'grok'     => ['has' => !empty($cfg['grok_key']),     'masked' => $mask($cfg['grok_key']??'')],
+        'default_provider' => $cfg['default_ai_provider'] ?? 'claude',
+        'default_model'    => $cfg['default_ai_model']    ?? '',
+    ]);
+}
+
 jsonOut(['error' => 'Unknown action'], 400);

@@ -16,6 +16,8 @@ $messages     = $b['messages']     ?? [];
 $hostContext  = $b['host_context'] ?? null;
 $chatMode     = $b['mode']         ?? 'host';  // 'host' | 'network'
 $networkStats = $b['network_stats'] ?? [];
+$contextData  = $b['context_data']  ?? [];
+$doStream     = !empty($b['stream']);
 
 // ── BUILD SYSTEM PROMPT ───────────────────────────────────
 $totalHosts  = $networkStats['total']        ?? '?';
@@ -23,6 +25,26 @@ $okHosts     = $networkStats['ok']           ?? '?';
 $probHosts   = $networkStats['with_problems']?? '?';
 $alarmCount  = $networkStats['alarms']       ?? '?';
 $unavailable = $networkStats['unavailable']  ?? '?';
+
+// Rich live context from the frontend
+$alarmList    = $contextData['alarm_list']    ?? [];
+$mapNodes     = $contextData['map_nodes']     ?? [];
+$problemHosts = $contextData['problem_hosts'] ?? [];
+
+$richContext = '';
+if (!empty($alarmList)) {
+    $SEV = [0=>'Not classified',1=>'Info',2=>'Warning',3=>'Average',4=>'High',5=>'Disaster'];
+    $lines = array_map(fn($a)=>"  [{$SEV[$a['severity']??0]}] ".($a['name']??'Unknown'), $alarmList);
+    $richContext .= "\n\nACTIVE ALARMS (".count($alarmList)."):\n".implode("\n", $lines);
+}
+if (!empty($problemHosts)) {
+    $lines = array_map(fn($h)=>"  - ".($h['host']??'?').": ".($h['problems']??0)." problem(s), worst severity ".($h['severity']??0).", available=".($h['available']??0), $problemHosts);
+    $richContext .= "\n\nHOSTS WITH ACTIVE PROBLEMS:\n".implode("\n", $lines);
+}
+if (!empty($mapNodes)) {
+    $lines = array_map(fn($n)=>"  - ".($n['label']??'?')." (".($n['type']??'unknown').")", $mapNodes);
+    $richContext .= "\n\nCURRENT MAP NODES (".count($mapNodes)."):\n".implode("\n", $lines);
+}
 
 $baseContext = <<<CTX
 You are NOC Sentinel — the AI Network Intelligence System for Tabadul, Iraq's national payment processing infrastructure.
@@ -70,8 +92,8 @@ if ($chatMode === 'host' && $hostContext) {
     $probs= $hostContext['problems']      ?? [];
     $ifaces=$hostContext['ifaces']        ?? [];
 
-    $probsText = empty($probs) ? 'None' : implode("\n  - ", array_map(fn($p)=>($p['name']??'Unknown').' (Sev:'.(int)($p['severity']??0).')', $probs));
-    $ifacesText = empty($ifaces) ? 'Not configured yet' : implode(', ', $ifaces);
+    $probsText  = empty($probs)   ? 'None' : implode("\n  - ", array_map(fn($p)=>($p['name']??'Unknown').' (Sev:'.(int)($p['severity']??0).')', $probs));
+    $ifacesText = empty($ifaces)  ? 'Not configured yet' : implode(', ', $ifaces);
 
     $systemPrompt = $baseContext . <<<HOST
 
@@ -102,12 +124,88 @@ After gathering info, provide:
 - Step-by-step Zabbix navigation to implement each recommendation
 HOST;
 } else {
-    // General network intelligence mode
     $contextFocus = $b['context_focus'] ?? 'network';
-    $systemPrompt = $baseContext . "\n\nMODE: General Network Intelligence. Context: $contextFocus\n\nHelp the engineer understand the current network state, identify issues, and improve monitoring coverage. Ask probing questions to learn more about the network topology and critical paths.";
+    $systemPrompt = $baseContext . $richContext . "\n\nMODE: General Network Intelligence. Context: $contextFocus\n\nYou have live network data above. Use it to give specific, actionable answers. Reference actual host names and alarm names from the data provided. Help the engineer understand the current network state, identify issues, and improve monitoring coverage.";
 }
 
-// ── CALL CLAUDE ───────────────────────────────────────────
+// ── STREAMING MODE ────────────────────────────────────────
+if ($doStream) {
+    // Disable output buffering for real-time streaming
+    while (ob_get_level()) ob_end_clean();
+    header('Content-Type: text/event-stream; charset=utf-8');
+    header('Cache-Control: no-cache');
+    header('X-Accel-Buffering: no');
+
+    $payload = json_encode([
+        'model'      => 'claude-sonnet-4-6',
+        'max_tokens' => 2048,
+        'stream'     => true,
+        'system'     => $systemPrompt,
+        'messages'   => $messages,
+    ]);
+
+    $buf = '';
+    $ch  = curl_init('https://api.anthropic.com/v1/messages');
+    curl_setopt_array($ch, [
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => $payload,
+        CURLOPT_RETURNTRANSFER => false,
+        CURLOPT_HTTPHEADER     => [
+            'Content-Type: application/json',
+            "x-api-key: $claudeKey",
+            'anthropic-version: 2023-06-01',
+        ],
+        CURLOPT_TIMEOUT        => 120,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_WRITEFUNCTION  => function ($ch, $data) use (&$buf) {
+            $buf .= $data;
+            // Process complete lines
+            while (($pos = strpos($buf, "\n")) !== false) {
+                $line = substr($buf, 0, $pos);
+                $buf  = substr($buf, $pos + 1);
+                $line = rtrim($line);
+
+                if (strpos($line, 'data: ') !== 0) continue;
+                $json = substr($line, 6);
+                if ($json === '[DONE]') {
+                    echo "event: done\ndata: {}\n\n";
+                    flush();
+                    continue;
+                }
+                $event = json_decode($json, true);
+                if (!is_array($event)) continue;
+
+                $type = $event['type'] ?? '';
+                if ($type === 'content_block_delta') {
+                    $text = $event['delta']['text'] ?? '';
+                    if ($text !== '') {
+                        echo 'data: ' . json_encode(['t' => $text], JSON_UNESCAPED_UNICODE) . "\n\n";
+                        flush();
+                    }
+                } elseif ($type === 'message_stop') {
+                    echo "event: done\ndata: {}\n\n";
+                    flush();
+                } elseif ($type === 'error') {
+                    $msg = $event['error']['message'] ?? 'Stream error';
+                    echo 'event: error' . "\n" . 'data: ' . json_encode(['error' => $msg]) . "\n\n";
+                    flush();
+                }
+            }
+            return strlen($data);
+        },
+    ]);
+    curl_exec($ch);
+    $errno = curl_errno($ch);
+    curl_close($ch);
+    if ($errno) {
+        echo "event: error\ndata: " . json_encode(['error' => 'Curl error: ' . $errno]) . "\n\n";
+        flush();
+    }
+    exit;
+}
+
+// ── NON-STREAMING (fallback / host chat) ──────────────────
 $payload = json_encode([
     'model'      => 'claude-sonnet-4-6',
     'max_tokens' => 2048,
