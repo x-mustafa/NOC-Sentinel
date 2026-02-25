@@ -1,0 +1,18 @@
+{
+  "name": "noc-sentinel-whatsapp",
+  "version": "1.0.0",
+  "description": "WhatsApp gateway for NOC Sentinel AI employees",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "install-deps": "npm install"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.9",
+    "express": "^4.18.2",
+    "axios": "^1.6.7",
+    "qrcode": "^1.5.3",
+    "pino": "^8.18.0",
+    "pino-pretty": "^11.0.0"
+  }
+}

@@ -1,14 +1,36 @@
-# Local config contains real credentials — never commit
-config.php
+# Environment / secrets
+.env
+*.env
+.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+env/
+
+# Node / WhatsApp sessions
+whatsapp/node_modules/
+whatsapp/sessions/
+whatsapp/sessions/intro_sent.json
+
+# Logs
+*.log
+logs/
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Logs
-*.log
-
-# IDE
+# Editor
 .vscode/
 .idea/
 *.swp
