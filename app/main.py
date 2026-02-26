@@ -8,7 +8,7 @@ import os
 
 from app.config import settings
 from app.database import close_pool, run_migration
-from app.routers import auth, zabbix, nodes, users, discover, import_router, chat, office, workflows, vault
+from app.routers import auth, zabbix, nodes, users, discover, import_router, chat, office, workflows, vault, ms365
 from app.services.workflow_engine import start_engine, stop_engine
 
 logging.basicConfig(level=logging.INFO)
@@ -50,6 +50,7 @@ app.include_router(chat.router,          prefix="/api/chat",      tags=["chat"])
 app.include_router(office.router,        prefix="/api/office",    tags=["office"])
 app.include_router(workflows.router,     prefix="/api/workflows", tags=["workflows"])
 app.include_router(vault.router)
+app.include_router(ms365.router,         prefix="/api/ms365",     tags=["ms365"])
 
 # Static files
 static_dir = os.path.join(os.path.dirname(__file__), "..", "static")

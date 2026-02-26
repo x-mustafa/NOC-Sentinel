@@ -125,6 +125,14 @@ async def run_migration():
         """ALTER TABLE `workflows`
            MODIFY COLUMN `action_type` VARCHAR(30) DEFAULT 'log'""",
 
+        """CREATE TABLE IF NOT EXISTS `ms365_teams_webhooks` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `name` VARCHAR(100) NOT NULL UNIQUE,
+            `webhook_url` TEXT NOT NULL,
+            `channel` VARCHAR(100) DEFAULT '',
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB""",
+
         """CREATE TABLE IF NOT EXISTS `vault_entries` (
             `id` INT AUTO_INCREMENT PRIMARY KEY,
             `name` VARCHAR(200) NOT NULL,

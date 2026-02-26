@@ -684,7 +684,7 @@ table.alarms-tbl{width:100%;border-collapse:collapse}
 .wf-step-label{font-size:10px;font-weight:700;letter-spacing:0.8px;color:var(--muted);text-transform:uppercase;margin:14px 0 8px}
 .wf-trigger-cards,.wf-emp-cards,.wf-action-cards{display:grid;gap:8px}
 .wf-trigger-cards{grid-template-columns:repeat(3,1fr)}
-.wf-action-cards{grid-template-columns:repeat(4,1fr)}
+.wf-action-cards{grid-template-columns:repeat(3,1fr)}
 .wf-emp-cards{grid-template-columns:repeat(4,1fr)}
 .wf-tc,.wf-ec,.wf-ac{
   padding:10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.02);
@@ -1634,6 +1634,9 @@ select.form-inp option{background:#0d1628}
       <button class="office-tab" id="otab-whatsapp" onclick="switchOfficeTab('whatsapp')">
         <i data-lucide="message-circle" style="width:13px;height:13px"></i> WhatsApp
       </button>
+      <button class="office-tab" id="otab-m365" onclick="switchOfficeTab('m365')">
+        <i data-lucide="mail" style="width:13px;height:13px"></i> Microsoft 365
+      </button>
     </div>
 
     <!-- ── Tab: Employees ── -->
@@ -1766,6 +1769,99 @@ select.form-inp option{background:#0d1628}
       </div>
     </div>
 
+    <!-- ── Tab: Microsoft 365 ── -->
+    <div class="office-tab-panel" id="otp-m365" style="display:none">
+      <div style="display:flex;flex-direction:column;flex:1;overflow:hidden">
+        <!-- Header -->
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0;background:rgba(6,10,20,0.7)">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:#0078d4">Microsoft 365 Integration</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">Outlook email & Microsoft Teams for AI employees</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="ofc-btn" onclick="loadM365Status()" style="font-size:10px;padding:5px 12px;background:rgba(255,255,255,0.04);border-color:var(--border);color:var(--muted)">↻ Test Connection</button>
+            <div id="m365-badge" style="font-size:10px;padding:3px 9px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);color:var(--muted)">Checking...</div>
+          </div>
+        </div>
+        <!-- Content scrollable area -->
+        <div style="flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:16px">
+
+          <!-- Account info -->
+          <div style="background:rgba(0,120,212,0.08);border:1px solid rgba(0,120,212,0.2);border-radius:10px;padding:14px 16px">
+            <div style="font-size:11px;font-weight:700;color:#0078d4;margin-bottom:8px">📧 Shared Account</div>
+            <div style="font-size:12px;color:var(--text)">nsentinal@tabadul.iq</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:2px">All AI employees share this Office 365 mailbox. Emails are sent with the employee name in the From field.</div>
+          </div>
+
+          <!-- Quick Send Email -->
+          <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+            <div style="font-size:11px;font-weight:700;color:var(--cyan);margin-bottom:10px">✉️ Send Email</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+              <div>
+                <div style="font-size:9px;color:var(--muted);margin-bottom:3px;text-transform:uppercase">From (Employee)</div>
+                <select id="m365-send-emp" class="form-inp" style="width:100%">
+                  <option value="aria">ARIA — NOC Analyst</option>
+                  <option value="nexus">NEXUS — Infrastructure Engineer</option>
+                  <option value="cipher">CIPHER — Security Analyst</option>
+                  <option value="vega">VEGA — Site Reliability Engineer</option>
+                </select>
+              </div>
+              <div>
+                <div style="font-size:9px;color:var(--muted);margin-bottom:3px;text-transform:uppercase">To (email)</div>
+                <input id="m365-send-to" class="form-inp" placeholder="recipient@example.com" style="width:100%">
+              </div>
+            </div>
+            <div style="margin-bottom:8px">
+              <div style="font-size:9px;color:var(--muted);margin-bottom:3px;text-transform:uppercase">Subject</div>
+              <input id="m365-send-subject" class="form-inp" placeholder="NOC Sentinel — Alert Report" style="width:100%">
+            </div>
+            <div style="margin-bottom:10px">
+              <div style="font-size:9px;color:var(--muted);margin-bottom:3px;text-transform:uppercase">Message</div>
+              <textarea id="m365-send-body" class="form-inp" rows="4" placeholder="Write your message here..." style="width:100%;resize:vertical;min-height:80px"></textarea>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <button onclick="m365SendEmail()" style="padding:6px 18px;border-radius:6px;font-size:11px;font-weight:700;border:1px solid rgba(0,120,212,0.4);background:rgba(0,120,212,0.12);color:#4da6ff;cursor:pointer">
+                📤 Send
+              </button>
+              <span id="m365-send-status" style="font-size:10px;color:var(--muted)"></span>
+            </div>
+          </div>
+
+          <!-- Teams Webhooks -->
+          <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+              <div style="font-size:11px;font-weight:700;color:#6264a7">🟣 Microsoft Teams Channels</div>
+              <button onclick="toggleM365TeamsAdd()" style="padding:3px 10px;border-radius:5px;font-size:10px;font-weight:600;border:1px solid rgba(98,100,167,0.4);background:rgba(98,100,167,0.08);color:#8b8dcc;cursor:pointer">+ Add Channel</button>
+            </div>
+            <div id="m365-teams-add" style="display:none;margin-bottom:12px;padding:10px;background:rgba(0,0,0,0.2);border-radius:7px">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+                <input id="m365-wh-name" class="form-inp" placeholder="Channel name (e.g. NOC Alerts)" style="font-size:11px">
+                <input id="m365-wh-channel" class="form-inp" placeholder="Channel (e.g. General)" style="font-size:11px">
+              </div>
+              <input id="m365-wh-url" class="form-inp" placeholder="https://xxx.webhook.office.com/webhookb2/..." style="width:100%;font-size:10px;font-family:monospace;margin-bottom:6px">
+              <div style="font-size:9px;color:var(--muted);margin-bottom:6px">In Teams: Channel → ··· → Connectors → Incoming Webhook → Configure → copy URL</div>
+              <button onclick="m365SaveWebhook()" style="padding:4px 12px;border-radius:5px;font-size:10px;font-weight:600;border:1px solid rgba(98,100,167,0.4);background:rgba(98,100,167,0.1);color:#8b8dcc;cursor:pointer">Save Webhook</button>
+            </div>
+            <div id="m365-teams-list" style="display:flex;flex-direction:column;gap:6px">
+              <div style="font-size:10px;color:var(--muted);font-style:italic">Loading...</div>
+            </div>
+          </div>
+
+          <!-- Inbox -->
+          <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+              <div style="font-size:11px;font-weight:700;color:var(--text)">📥 Inbox</div>
+              <button onclick="loadM365Inbox()" style="padding:3px 10px;border-radius:5px;font-size:10px;border:1px solid var(--border);background:rgba(255,255,255,0.03);color:var(--muted);cursor:pointer">↻ Refresh</button>
+            </div>
+            <div id="m365-inbox" style="display:flex;flex-direction:column;gap:5px;max-height:300px;overflow-y:auto">
+              <div style="font-size:10px;color:var(--muted);font-style:italic">Click Refresh to load emails...</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
   </div>
 </div><!-- /main-area -->
 
@@ -1894,6 +1990,16 @@ select.form-inp option{background:#0d1628}
         <div class="wf-ac-title">WhatsApp Group</div>
         <div class="wf-ac-desc">Send result to WA group</div>
       </div>
+      <div class="wf-ac" onclick="wfSelectAction('email')" id="wac-email">
+        <div class="wf-ac-icon">📧</div>
+        <div class="wf-ac-title">Send Email</div>
+        <div class="wf-ac-desc">Email via Office 365</div>
+      </div>
+      <div class="wf-ac" onclick="wfSelectAction('teams')" id="wac-teams">
+        <div class="wf-ac-icon">💬</div>
+        <div class="wf-ac-title">Teams Message</div>
+        <div class="wf-ac-desc">Post to Teams channel</div>
+      </div>
     </div>
     <input type="hidden" id="wf-f-action" value="log">
     <div id="wf-action-webhook" style="display:none;margin-top:10px">
@@ -1937,6 +2043,60 @@ select.form-inp option{background:#0d1628}
         <input type="hidden" id="wf-f-wa-group-name" value="">
       </div>
       <div id="wf-wa-groups-status" style="font-size:10px;color:var(--muted);margin-top:5px"></div>
+    </div>
+
+    <!-- Email action config -->
+    <div id="wf-action-email" style="display:none;margin-top:10px">
+      <div style="font-size:10px;color:var(--muted);margin-bottom:8px;line-height:1.5">
+        <b style="color:#00d4ff">Email via Office 365:</b> The AI employee will send the workflow result as an email. Make sure M365 credentials are configured in Settings.
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div>
+          <div style="font-size:9px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">Send from employee</div>
+          <select id="wf-f-email-emp" class="form-inp" style="width:100%">
+            <option value="aria">ARIA — NOC Analyst</option>
+            <option value="nexus">NEXUS — Infrastructure Engineer</option>
+            <option value="cipher">CIPHER — Security Analyst</option>
+            <option value="vega">VEGA — Site Reliability Engineer</option>
+          </select>
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">To (email address)</div>
+          <input id="wf-f-email-to" class="form-inp" placeholder="recipient@company.com" style="width:100%">
+        </div>
+      </div>
+      <div>
+        <div style="font-size:9px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">Subject</div>
+        <input id="wf-f-email-subject" class="form-inp" placeholder="NOC Sentinel Alert — {workflow_name}" style="width:100%">
+      </div>
+    </div>
+
+    <!-- Teams action config -->
+    <div id="wf-action-teams" style="display:none;margin-top:10px">
+      <div style="font-size:10px;color:var(--muted);margin-bottom:8px;line-height:1.5">
+        <b style="color:#7c3aed">Teams Message:</b> The AI employee will post the result to a Microsoft Teams channel. Webhooks are managed in the Office → M365 tab.
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div>
+          <div style="font-size:9px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">Send from employee</div>
+          <select id="wf-f-teams-emp" class="form-inp" style="width:100%">
+            <option value="aria">ARIA — NOC Analyst</option>
+            <option value="nexus">NEXUS — Infrastructure Engineer</option>
+            <option value="cipher">CIPHER — Security Analyst</option>
+            <option value="vega">VEGA — Site Reliability Engineer</option>
+          </select>
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">Teams Channel Webhook</div>
+          <select id="wf-f-teams-webhook" class="form-inp" style="width:100%" onchange="wfTeamsWebhookChange()">
+            <option value="">— Loading webhooks… —</option>
+          </select>
+        </div>
+      </div>
+      <input type="hidden" id="wf-f-teams-webhook-url" value="">
+      <div style="font-size:9px;color:var(--muted);margin-top:4px">
+        Don't see your channel? Add it in <b style="color:#a78bfa">Office → M365 → Teams Webhooks</b>
+      </div>
     </div>
 
     <!-- Enable toggle -->
@@ -4816,7 +4976,7 @@ function toggleAutoCollab() {
 //  OFFICE PAGE TABS
 // ═══════════════════════════════════════════════════════════
 function switchOfficeTab(tab) {
-  ['employees','teamchat','workflows','vault','whatsapp'].forEach(t => {
+  ['employees','teamchat','workflows','vault','whatsapp','m365'].forEach(t => {
     document.getElementById(`otp-${t}`).style.display = t === tab ? '' : 'none';
     const btn = document.getElementById(`otab-${t}`);
     if (btn) btn.classList.toggle('active', t === tab);
@@ -4826,6 +4986,7 @@ function switchOfficeTab(tab) {
   if (tab === 'teamchat')  loadTeamSessionHistory();
   if (tab === 'vault')     loadVault();
   if (tab === 'whatsapp')  loadWAStatus();
+  if (tab === 'm365')      loadM365Status();
 }
 
 document.addEventListener('keydown', e => {
@@ -4898,7 +5059,7 @@ async function loadWorkflows() {
   const empColors = {aria:'#00d4ff',nexus:'#a855f7',cipher:'#ff8c00',vega:'#4ade80'};
   const empNames  = {aria:'ARIA',nexus:'NEXUS',cipher:'CIPHER',vega:'VEGA'};
   const trigIcons = {manual:'🖱️',alarm:'🔔',schedule:'🕐'};
-  const actIcons  = {log:'📝',webhook:'🌐',zabbix_ack:'✅',whatsapp_group:'📱'};
+  const actIcons  = {log:'📝',webhook:'🌐',zabbix_ack:'✅',whatsapp_group:'📱',email:'📧',teams:'💬'};
   grid.innerHTML = wfs.map(w => {
     const tc = w.trigger_config ? (typeof w.trigger_config==='string'?JSON.parse(w.trigger_config):w.trigger_config) : {};
     let trigDetail = '';
@@ -4949,12 +5110,17 @@ function wfSelectEmp(e) {
   document.getElementById('wf-f-employee').value = e;
 }
 function wfSelectAction(a) {
-  ['log','webhook','zabbix_ack','whatsapp_group'].forEach(v => {
-    document.getElementById(`wac-${v}`).classList.toggle('active', v===a);
+  ['log','webhook','zabbix_ack','whatsapp_group','email','teams'].forEach(v => {
+    const el = document.getElementById(`wac-${v}`);
+    if (el) el.classList.toggle('active', v===a);
   });
   document.getElementById('wf-f-action').value = a;
   document.getElementById('wf-action-webhook').style.display        = a==='webhook'         ? '' : 'none';
   document.getElementById('wf-action-whatsapp_group').style.display = a==='whatsapp_group'  ? '' : 'none';
+  document.getElementById('wf-action-email').style.display          = a==='email'           ? '' : 'none';
+  document.getElementById('wf-action-teams').style.display          = a==='teams'           ? '' : 'none';
+  // Auto-load Teams webhooks when teams action selected
+  if (a === 'teams') wfLoadTeamsWebhooks();
 }
 async function wfLoadGroups() {
   const empId  = document.getElementById('wf-f-wa-emp').value;
@@ -4978,6 +5144,30 @@ async function wfLoadGroups() {
     status.textContent = `✗ ${e.message}`; status.style.color = '#f87171';
     sel.innerHTML = '<option value="">— Error loading groups —</option>';
   }
+}
+async function wfLoadTeamsWebhooks() {
+  const sel = document.getElementById('wf-f-teams-webhook');
+  try {
+    const rows = await api('/api/ms365/teams-webhooks');
+    if (!rows || !rows.length) {
+      sel.innerHTML = '<option value="">— No webhooks saved. Add one in M365 tab —</option>';
+      return;
+    }
+    const cur = document.getElementById('wf-f-teams-webhook-url').value;
+    sel.innerHTML = '<option value="">— Select a channel —</option>' +
+      rows.map(r => `<option value="${r.webhook_url}" ${r.webhook_url===cur?'selected':''}>${r.name}${r.channel?' ('+r.channel+')':''}</option>`).join('');
+    // Restore selection if URL was saved
+    if (cur) {
+      const opt = [...sel.options].find(o => o.value === cur);
+      if (opt) opt.selected = true;
+    }
+  } catch(e) {
+    sel.innerHTML = `<option value="">— Error: ${e.message} —</option>`;
+  }
+}
+function wfTeamsWebhookChange() {
+  const sel = document.getElementById('wf-f-teams-webhook');
+  document.getElementById('wf-f-teams-webhook-url').value = sel.value;
 }
 async function wfTestWebhook() {
   const url = document.getElementById('wf-f-webhook-url').value.trim();
@@ -5027,6 +5217,12 @@ function openCreateWorkflowModal() {
   document.getElementById('wf-f-wa-emp').value = 'aria';
   document.getElementById('wf-f-wa-group').innerHTML = '<option value="">— click Load Groups first —</option>';
   document.getElementById('wf-wa-groups-status').textContent = '';
+  document.getElementById('wf-f-email-emp').value = 'aria';
+  document.getElementById('wf-f-email-to').value = '';
+  document.getElementById('wf-f-email-subject').value = '';
+  document.getElementById('wf-f-teams-emp').value = 'aria';
+  document.getElementById('wf-f-teams-webhook').innerHTML = '<option value="">— Loading… —</option>';
+  document.getElementById('wf-f-teams-webhook-url').value = '';
   document.getElementById('wf-f-active').checked = true;
   document.getElementById('wf-f-cron').value = '0 8 * * *';
   document.getElementById('wf-f-cron').style.display = 'none';
@@ -5069,6 +5265,17 @@ async function openEditWorkflowModal(id) {
     document.getElementById('wf-f-wa-group').innerHTML = '<option value="">— click Load Groups first —</option>';
     document.getElementById('wf-wa-groups-status').textContent = '';
   }
+  // Restore email config
+  document.getElementById('wf-f-email-emp').value     = ac.emp_id  || 'aria';
+  document.getElementById('wf-f-email-to').value      = ac.to      || '';
+  document.getElementById('wf-f-email-subject').value = ac.subject  || '';
+  // Restore Teams config
+  document.getElementById('wf-f-teams-emp').value         = ac.emp_id     || 'aria';
+  document.getElementById('wf-f-teams-webhook-url').value = ac.webhook_url || '';
+  if (ac.webhook_url) {
+    document.getElementById('wf-f-teams-webhook').innerHTML =
+      `<option value="${ac.webhook_url}">${ac.channel || ac.webhook_url}</option>`;
+  }
   wfSelectTrigger(wf.trigger_type || 'manual');
   wfSelectEmp(wf.employee_id || 'aria');
   wfSelectAction(wf.action_type || 'log');
@@ -5103,6 +5310,24 @@ async function saveWorkflow() {
       emp_id:     document.getElementById('wf-f-wa-emp').value,
       group_jid:  grpJid,
       group_name: grpName,
+    };
+  } else if (action_type === 'email') {
+    const to = document.getElementById('wf-f-email-to').value.trim();
+    if (!to) { showToast('Enter an email recipient.', 'warn'); return; }
+    action_config = {
+      emp_id:  document.getElementById('wf-f-email-emp').value,
+      to,
+      subject: document.getElementById('wf-f-email-subject').value.trim() || 'NOC Sentinel Workflow Result',
+    };
+  } else if (action_type === 'teams') {
+    const webhookUrl = document.getElementById('wf-f-teams-webhook-url').value;
+    if (!webhookUrl) { showToast('Select a Teams channel webhook.', 'warn'); return; }
+    const webhookSel = document.getElementById('wf-f-teams-webhook');
+    const channelName = webhookSel.options[webhookSel.selectedIndex]?.text || '';
+    action_config = {
+      emp_id:      document.getElementById('wf-f-teams-emp').value,
+      webhook_url: webhookUrl,
+      channel:     channelName,
     };
   }
   const body = {
@@ -5405,6 +5630,135 @@ async function waReconnect(empId) {
     await fetch(`${WA_SERVICE}/reconnect/${empId}`, { method: 'POST', credentials: 'include' });
     setTimeout(loadWAStatus, 2000);
   } catch(e) { alert('Could not reach WhatsApp service: ' + e.message); }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MICROSOFT 365
+// ═══════════════════════════════════════════════════════════
+async function loadM365Status() {
+  const badge = document.getElementById('m365-badge');
+  badge.textContent = 'Checking...'; badge.style.cssText = 'color:var(--muted)';
+  try {
+    const r = await fetch('/api/ms365/status', { credentials: 'include' });
+    const d = await r.json();
+    if (d.smtp?.ok) {
+      badge.textContent = '● Connected';
+      badge.style.cssText = 'font-size:10px;padding:3px 9px;border-radius:10px;border:1px solid rgba(0,120,212,0.3);color:#4da6ff;background:rgba(0,120,212,0.08)';
+    } else {
+      badge.textContent = '● Error: ' + (d.smtp?.error || 'unknown');
+      badge.style.cssText = 'font-size:10px;padding:3px 9px;border-radius:10px;border:1px solid rgba(248,113,113,0.3);color:#f87171;background:rgba(248,113,113,0.06)';
+    }
+    loadM365Webhooks();
+  } catch(e) {
+    badge.textContent = '● Unreachable';
+    badge.style.cssText = 'font-size:10px;padding:3px 9px;border-radius:10px;border:1px solid rgba(248,113,113,0.3);color:#f87171';
+  }
+}
+
+async function loadM365Inbox() {
+  const el = document.getElementById('m365-inbox');
+  el.innerHTML = '<div style="font-size:10px;color:var(--muted)">Loading...</div>';
+  try {
+    const r   = await fetch('/api/ms365/inbox?limit=15', { credentials: 'include' });
+    const msgs = await r.json();
+    if (!msgs.length || msgs[0]?.error) {
+      el.innerHTML = `<div style="font-size:10px;color:#f87171">${msgs[0]?.error || 'No emails found'}</div>`;
+      return;
+    }
+    el.innerHTML = msgs.map(m => `
+      <div style="padding:8px 10px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+          <div style="font-size:11px;font-weight:600;color:var(--text)">${m.subject}</div>
+          <div style="font-size:9px;color:var(--muted);white-space:nowrap;margin-left:8px">${m.date?.substring(0,16)||''}</div>
+        </div>
+        <div style="font-size:10px;color:var(--muted)">${m.from}</div>
+        ${m.preview ? `<div style="font-size:10px;color:var(--muted);margin-top:4px;opacity:0.7">${m.preview.substring(0,120)}...</div>` : ''}
+      </div>`).join('');
+  } catch(e) { el.innerHTML = `<div style="font-size:10px;color:#f87171">${e.message}</div>`; }
+}
+
+async function m365SendEmail() {
+  const st  = document.getElementById('m365-send-status');
+  const to  = document.getElementById('m365-send-to').value.trim();
+  const sub = document.getElementById('m365-send-subject').value.trim();
+  const bod = document.getElementById('m365-send-body').value.trim();
+  const emp = document.getElementById('m365-send-emp').value;
+  if (!to || !sub || !bod) { st.textContent = '⚠ Fill in all fields'; st.style.color='#ffb300'; return; }
+  st.textContent = 'Sending...'; st.style.color = 'var(--muted)';
+  try {
+    const r = await fetch('/api/ms365/send-email', {
+      method: 'POST', credentials: 'include',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ to, subject: sub, body: bod, employee_id: emp }),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      st.textContent = '✓ Email sent!'; st.style.color = '#4ade80';
+      document.getElementById('m365-send-to').value = '';
+      document.getElementById('m365-send-subject').value = '';
+      document.getElementById('m365-send-body').value = '';
+    } else {
+      st.textContent = '✗ ' + (d.detail || d.error || 'Failed'); st.style.color = '#f87171';
+    }
+  } catch(e) { st.textContent = '✗ ' + e.message; st.style.color = '#f87171'; }
+}
+
+async function loadM365Webhooks() {
+  const el = document.getElementById('m365-teams-list');
+  try {
+    const r  = await fetch('/api/ms365/teams-webhooks', { credentials: 'include' });
+    const wh = await r.json();
+    if (!wh.length) { el.innerHTML = '<div style="font-size:10px;color:var(--muted);font-style:italic">No Teams channels saved yet. Add one above.</div>'; return; }
+    el.innerHTML = wh.map(w => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:rgba(98,100,167,0.06);border:1px solid rgba(98,100,167,0.2);border-radius:6px">
+        <div>
+          <div style="font-size:11px;font-weight:600;color:#8b8dcc">${w.name}</div>
+          <div style="font-size:9px;color:var(--muted)">${w.channel || 'General'} · ${w.webhook_url?.substring(0,40)}...</div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button onclick="m365TestTeams(${w.id},'${w.webhook_url?.replace(/'/g,"\\'")}')" style="padding:3px 8px;border-radius:4px;font-size:9px;font-weight:600;border:1px solid rgba(98,100,167,0.3);background:rgba(98,100,167,0.1);color:#8b8dcc;cursor:pointer">Test</button>
+          <button onclick="m365DeleteWebhook(${w.id})" style="padding:3px 8px;border-radius:4px;font-size:9px;border:1px solid rgba(248,113,113,0.3);background:rgba(248,113,113,0.06);color:#f87171;cursor:pointer">✕</button>
+        </div>
+      </div>`).join('');
+  } catch {}
+}
+
+function toggleM365TeamsAdd() {
+  const el = document.getElementById('m365-teams-add');
+  el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+async function m365SaveWebhook() {
+  const name = document.getElementById('m365-wh-name').value.trim();
+  const url  = document.getElementById('m365-wh-url').value.trim();
+  const ch   = document.getElementById('m365-wh-channel').value.trim();
+  if (!name || !url) return;
+  await fetch('/api/ms365/teams-webhooks', {
+    method: 'POST', credentials: 'include',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ name, webhook_url: url, channel: ch }),
+  });
+  document.getElementById('m365-wh-name').value = '';
+  document.getElementById('m365-wh-url').value  = '';
+  document.getElementById('m365-wh-channel').value = '';
+  document.getElementById('m365-teams-add').style.display = 'none';
+  loadM365Webhooks();
+}
+
+async function m365TestTeams(id, webhookUrl) {
+  const r = await fetch('/api/ms365/send-teams', {
+    method: 'POST', credentials: 'include',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ webhook_url: webhookUrl, title: '✅ NOC Sentinel Test', message: 'This is a test message from NOC Sentinel. Your Teams integration is working correctly.', employee_id: 'aria' }),
+  });
+  const d = await r.json();
+  showToast(d.ok ? '✓ Teams message sent!' : ('✗ ' + (d.detail||d.error||'Failed')), d.ok ? 'success' : 'error');
+}
+
+async function m365DeleteWebhook(id) {
+  if (!confirm('Remove this Teams webhook?')) return;
+  await fetch(`/api/ms365/teams-webhooks/${id}`, { method: 'DELETE', credentials: 'include' });
+  loadM365Webhooks();
 }
 
 // ═══════════════════════════════════════════════════════════

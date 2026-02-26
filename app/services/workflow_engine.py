@@ -262,6 +262,28 @@ async def _execute_action(wf: dict, trigger_data: dict, ai_response: str) -> str
         except Exception as e:
             return f"whatsapp_group error: {e}"
 
+    elif action_type == "email":
+        from app.services.ms365 import send_email
+        to      = cfg.get("to", "")
+        subject = cfg.get("subject", f"NOC Sentinel — {wf['name']}")
+        emp_id  = cfg.get("emp_id", wf.get("employee_id", "aria"))
+        if not to:
+            return "error: no recipient email"
+        result = await send_email(to=to, subject=subject, body=ai_response,
+                                  employee_id=emp_id)
+        return f"email: {'sent' if result['ok'] else result.get('error','failed')}"
+
+    elif action_type == "teams":
+        from app.services.ms365 import send_teams_message
+        webhook_url = cfg.get("webhook_url", "")
+        title       = cfg.get("title", wf["name"])
+        emp_id      = cfg.get("emp_id", wf.get("employee_id", "aria"))
+        if not webhook_url:
+            return "error: no Teams webhook URL"
+        result = await send_teams_message(webhook_url=webhook_url, message=ai_response,
+                                          title=title, employee_id=emp_id)
+        return f"teams: {'sent' if result['ok'] else result.get('error','failed')}"
+
     return f"unknown action: {action_type}"
 
 
