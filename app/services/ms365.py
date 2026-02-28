@@ -207,24 +207,25 @@ async def send_teams_message(
 # ── Test Graph API connectivity ────────────────────────────────────────────────
 
 async def test_graph() -> dict:
-    """Test Graph API token acquisition and basic mailbox access."""
+    """Test Graph API token acquisition and mailbox access (Mail.ReadWrite required)."""
     from app.config import settings
     if not _is_configured():
         return {"ok": False, "error": "Graph API credentials not configured"}
     try:
         token = await _get_token()
         headers = {"Authorization": f"Bearer {token}"}
-        url = f"{GRAPH}/users/{settings.ms365_email}?$select=displayName,mail,userPrincipalName"
+        # Use mailFolders endpoint — only needs Mail.ReadWrite (no User.Read.All)
+        url = f"{GRAPH}/users/{settings.ms365_email}/mailFolders/inbox?$select=id,displayName,totalItemCount"
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(url, headers=headers)
         if resp.status_code == 200:
-            u = resp.json()
+            folder = resp.json()
             return {
                 "ok":          True,
-                "displayName": u.get("displayName", ""),
-                "mail":        u.get("mail") or u.get("userPrincipalName", ""),
-                "message":     "Graph API connected successfully",
+                "displayName": settings.ms365_email,
+                "inbox_count": folder.get("totalItemCount", "?"),
+                "message":     "Graph API connected — mailbox accessible",
             }
-        return {"ok": False, "error": f"Graph {resp.status_code}: {resp.text[:200]}"}
+        return {"ok": False, "error": f"Graph {resp.status_code}: {resp.text[:300]}"}
     except Exception as e:
         return {"ok": False, "error": str(e)}
