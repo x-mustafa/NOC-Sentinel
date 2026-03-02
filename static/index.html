@@ -14,8 +14,8 @@
 <style>
 :root{
   --bg:#06090f; --surface:#0b1120; --surface2:#0f1929; --surface3:#131f36;
-  --border:#182540; --border2:#1e2e4a;
-  --text:#b8cce4; --muted:#3d5470; --bright:#fff;
+  --border:#1a2b44; --border2:#223558;
+  --text:#c2d4eb; --muted:#5a7a9a; --bright:#fff;
   --cyan:#00d4ff; --green:#00e676; --yellow:#ffb300; --orange:#ff6d00;
   --red:#ff1744; --purple:#bb86fc;
   --sev5:#FF1744; --sev4:#FF6D00; --sev3:#FFB300; --sev2:#78909C; --sev1:#00B0FF; --sev0:#9E9E9E;
@@ -108,16 +108,16 @@ a.nav-item{text-decoration:none;color:var(--text)}
 }
 .topbar-title{font-size:14px;font-weight:700;color:#e8f0ff;flex:1;letter-spacing:0.3px}
 .stat-chip{
-  display:flex;align-items:center;gap:5px;padding:4px 10px;
-  border-radius:6px;border:1px solid var(--border2);
+  display:flex;align-items:center;gap:6px;padding:4px 12px;
+  border-radius:20px;border:1px solid var(--border);
   font-size:10px;font-family:'JetBrains Mono',monospace;
-  background:rgba(255,255,255,0.025);
-  transition:border-color 0.18s;
+  background:rgba(255,255,255,0.03);
+  transition:border-color 0.18s;cursor:default;
 }
-.stat-chip:hover{border-color:rgba(0,212,255,0.25)}
-.stat-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
-.stat-num{color:#e8f0ff;font-weight:700;font-size:11px}
-.stat-lbl{color:var(--muted);font-size:10px}
+.stat-chip:hover{border-color:rgba(0,212,255,0.3);background:rgba(0,212,255,0.04)}
+.stat-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;box-shadow:0 0 5px currentColor}
+.stat-num{color:#e8f0ff;font-weight:700;font-size:12px;letter-spacing:0.3px}
+.stat-lbl{color:#5a7a9a;font-size:10px;font-weight:500}
 .refresh-info{font-size:9px;color:var(--muted);font-family:'JetBrains Mono',monospace;white-space:nowrap}
 .live-pill{
   display:flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;
@@ -1086,6 +1086,160 @@ select.form-inp option{background:#0d1628}
 .attach-drop-zone-txt{font-size:11px;color:var(--muted)}
 .attach-drop-zone-txt span{color:var(--cyan)}
 .assign-files-list{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;min-height:0}
+
+/* ── EMPLOYEE TYPE BADGE ── */
+.emp-type-badge{
+  display:inline-flex;align-items:center;gap:4px;margin-top:3px;
+  font-size:9px;font-weight:600;color:#7aadcf;letter-spacing:0.4px;
+  padding:1px 7px;border-radius:10px;border:1px solid rgba(120,173,207,0.25);
+  background:rgba(120,173,207,0.06);font-family:'JetBrains Mono',monospace;
+  cursor:pointer;transition:all 0.15s;
+}
+.emp-type-badge:hover{border-color:rgba(0,212,255,0.45);color:var(--cyan);background:rgba(0,212,255,0.08)}
+
+/* ── HISTORY TAB ── */
+.hist-layout{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
+.hist-toolbar{
+  display:flex;align-items:center;gap:10px;padding:12px 16px;
+  border-bottom:1px solid var(--border);flex-shrink:0;background:rgba(6,10,20,0.7);
+  flex-wrap:wrap;
+}
+.hist-emp-sel{
+  padding:5px 10px;border-radius:6px;border:1px solid var(--border2);
+  background:rgba(255,255,255,0.04);color:#b8cce4;font-size:11px;
+  font-family:'Space Grotesk',sans-serif;outline:none;cursor:pointer;
+}
+.hist-filter-btn{
+  padding:4px 12px;border-radius:5px;font-size:10px;font-weight:600;
+  border:1px solid var(--border2);background:rgba(255,255,255,0.03);
+  color:#7aadcf;cursor:pointer;transition:all 0.15s;font-family:'Space Grotesk',sans-serif;
+}
+.hist-filter-btn:hover,.hist-filter-btn.active{
+  background:rgba(0,212,255,0.1);border-color:rgba(0,212,255,0.4);color:var(--cyan);
+}
+.hist-list{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:8px}
+.hist-event{
+  background:rgba(11,17,34,0.9);border:1px solid var(--border);border-radius:10px;
+  padding:12px 14px;cursor:pointer;transition:all 0.15s;position:relative;
+}
+.hist-event:hover{border-color:rgba(0,212,255,0.3);background:rgba(11,17,34,1)}
+.hist-event-top{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.hist-type-chip{
+  font-size:9px;font-weight:700;letter-spacing:0.5px;padding:2px 8px;border-radius:5px;
+  font-family:'JetBrains Mono',monospace;flex-shrink:0;
+}
+.hist-type-workflow{background:rgba(0,212,255,0.1);color:#7dd3fc;border:1px solid rgba(0,212,255,0.25)}
+.hist-type-incident{background:rgba(255,23,68,0.1);color:#fca5a5;border:1px solid rgba(255,23,68,0.25)}
+.hist-type-message{background:rgba(168,85,247,0.1);color:#c4b5fd;border:1px solid rgba(168,85,247,0.25)}
+.hist-type-shift{background:rgba(74,222,128,0.1);color:#86efac;border:1px solid rgba(74,222,128,0.25)}
+.hist-type-memory{background:rgba(251,191,36,0.1);color:#fde68a;border:1px solid rgba(251,191,36,0.25)}
+.hist-event-title{font-size:11px;font-weight:700;color:#c8d8f0;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hist-event-time{font-size:9px;color:#3d6070;font-family:'JetBrains Mono',monospace;flex-shrink:0}
+.hist-event-summary{font-size:10.5px;color:#7090b0;line-height:1.5;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.hist-event-footer{display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap}
+.hist-outcome-badge{font-size:9px;padding:1px 7px;border-radius:4px;font-weight:600;letter-spacing:0.3px}
+.hist-outcome-correct{background:rgba(74,222,128,0.12);color:#86efac;border:1px solid rgba(74,222,128,0.25)}
+.hist-outcome-incorrect{background:rgba(255,23,68,0.12);color:#fca5a5;border:1px solid rgba(255,23,68,0.25)}
+.hist-outcome-escalated{background:rgba(251,191,36,0.12);color:#fde68a;border:1px solid rgba(251,191,36,0.25)}
+.hist-feedback-pill{
+  font-size:9px;color:#7aadcf;background:rgba(120,173,207,0.07);
+  border:1px solid rgba(120,173,207,0.2);border-radius:4px;padding:1px 7px;
+  cursor:pointer;transition:all 0.15s;margin-left:auto;
+}
+.hist-feedback-pill:hover{background:rgba(0,212,255,0.12);border-color:rgba(0,212,255,0.4);color:var(--cyan)}
+
+/* ── FEEDBACK MODAL ── */
+.feedback-modal-overlay{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);
+  z-index:950;align-items:center;justify-content:center;
+}
+.feedback-modal-overlay.open{display:flex}
+.feedback-modal{
+  background:var(--surface);border:1px solid rgba(0,212,255,0.25);border-radius:14px;
+  padding:24px;width:520px;max-width:94vw;max-height:86vh;overflow-y:auto;
+  box-shadow:0 0 60px rgba(0,0,0,0.6),0 0 30px rgba(0,212,255,0.06);
+}
+.feedback-modal-title{font-size:14px;font-weight:700;color:var(--cyan);margin-bottom:14px}
+.feedback-comments{display:flex;flex-direction:column;gap:8px;margin-bottom:14px;max-height:250px;overflow-y:auto}
+.feedback-comment{
+  background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:10px 12px;
+}
+.feedback-comment-text{font-size:11px;color:#c0d0e8;line-height:1.5;margin-bottom:4px}
+.feedback-comment-meta{font-size:9px;color:#3d6070;font-family:'JetBrains Mono',monospace}
+.feedback-rating-row{display:flex;gap:6px;margin-bottom:10px}
+.feedback-rating-btn{
+  flex:1;padding:7px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;
+  border:1px solid var(--border);background:rgba(255,255,255,0.03);color:#7090b0;
+  transition:all 0.15s;text-align:center;
+}
+.feedback-rating-btn[data-rating="3"].sel{background:rgba(74,222,128,0.15);border-color:rgba(74,222,128,0.4);color:#86efac}
+.feedback-rating-btn[data-rating="2"].sel{background:rgba(251,191,36,0.15);border-color:rgba(251,191,36,0.4);color:#fde68a}
+.feedback-rating-btn[data-rating="1"].sel{background:rgba(255,23,68,0.15);border-color:rgba(255,23,68,0.4);color:#fca5a5}
+.feedback-rating-btn:hover{background:rgba(255,255,255,0.07)}
+.feedback-textarea{
+  width:100%;background:rgba(255,255,255,0.04);border:1px solid var(--border2);
+  border-radius:7px;padding:9px 11px;color:#e0eaff;font-size:12px;
+  font-family:'Space Grotesk',sans-serif;outline:none;resize:vertical;min-height:80px;
+  box-sizing:border-box;margin-bottom:10px;transition:border-color 0.15s;
+}
+.feedback-textarea:focus{border-color:rgba(0,212,255,0.4)}
+.feedback-submit-btn{
+  padding:8px 20px;border-radius:7px;background:linear-gradient(135deg,rgba(0,212,255,0.15),rgba(120,80,240,0.1));
+  border:1px solid rgba(0,212,255,0.35);color:var(--cyan);font-size:11px;font-weight:700;
+  cursor:pointer;transition:all 0.15s;font-family:'Space Grotesk',sans-serif;
+}
+.feedback-submit-btn:hover{background:linear-gradient(135deg,rgba(0,212,255,0.25),rgba(120,80,240,0.2));box-shadow:0 0 14px rgba(0,212,255,0.2)}
+
+/* ── INSTRUCTIONS EDITOR MODAL ── */
+.instr-modal-overlay{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);
+  z-index:960;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;
+}
+.instr-modal-overlay.open{display:flex}
+.instr-modal{
+  background:var(--surface);border:1px solid rgba(0,212,255,0.25);border-radius:14px;
+  padding:24px;width:720px;max-width:96vw;
+  box-shadow:0 0 60px rgba(0,0,0,0.6);margin:auto;
+}
+.instr-modal-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.instr-modal-title{font-size:14px;font-weight:700;color:var(--cyan)}
+.instr-section-lbl{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:5px}
+.instr-textarea{
+  width:100%;background:rgba(255,255,255,0.03);border:1px solid var(--border2);border-radius:7px;
+  padding:9px 11px;color:#d0e0f4;font-size:11px;font-family:'JetBrains Mono',monospace;
+  outline:none;resize:vertical;min-height:80px;box-sizing:border-box;
+  margin-bottom:12px;line-height:1.55;transition:border-color 0.15s;
+}
+.instr-textarea:focus{border-color:rgba(0,212,255,0.4);background:rgba(255,255,255,0.05)}
+.instr-type-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.instr-type-chip{
+  padding:4px 10px;border-radius:6px;font-size:10px;font-weight:600;cursor:pointer;
+  border:1px solid var(--border);background:rgba(255,255,255,0.03);color:#7090b0;
+  transition:all 0.15s;font-family:'Space Grotesk',sans-serif;
+}
+.instr-type-chip:hover,.instr-type-chip.sel{background:rgba(0,212,255,0.1);border-color:rgba(0,212,255,0.4);color:var(--cyan)}
+.instr-save-btn{
+  padding:8px 24px;border-radius:7px;background:linear-gradient(135deg,rgba(0,212,255,0.15),rgba(120,80,240,0.1));
+  border:1px solid rgba(0,212,255,0.35);color:var(--cyan);font-size:12px;font-weight:700;
+  cursor:pointer;transition:all 0.15s;font-family:'Space Grotesk',sans-serif;
+}
+.instr-save-btn:hover{background:linear-gradient(135deg,rgba(0,212,255,0.25),rgba(120,80,240,0.2));box-shadow:0 0 14px rgba(0,212,255,0.2)}
+.instr-reset-btn{
+  padding:8px 16px;border-radius:7px;border:1px solid rgba(255,100,0,0.3);background:rgba(255,100,0,0.05);
+  color:#ff8c00;font-size:11px;font-weight:600;cursor:pointer;transition:all 0.15s;font-family:'Space Grotesk',sans-serif;
+}
+.instr-reset-btn:hover{background:rgba(255,100,0,0.12);border-color:rgba(255,100,0,0.5)}
+.instr-status{font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace;padding:4px 0}
+
+/* ── IMPROVED SPAN / BADGE COLORS ── */
+/* Event type colors consistent system */
+.badge-cyan{background:rgba(0,212,255,0.12);color:#7dd3fc;border:1px solid rgba(0,212,255,0.3);padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600}
+.badge-green{background:rgba(74,222,128,0.12);color:#86efac;border:1px solid rgba(74,222,128,0.3);padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600}
+.badge-red{background:rgba(255,23,68,0.12);color:#fca5a5;border:1px solid rgba(255,23,68,0.3);padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600}
+.badge-yellow{background:rgba(251,191,36,0.12);color:#fde68a;border:1px solid rgba(251,191,36,0.3);padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600}
+.badge-purple{background:rgba(168,85,247,0.12);color:#c4b5fd;border:1px solid rgba(168,85,247,0.3);padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600}
+.badge-orange{background:rgba(249,115,22,0.12);color:#fdba74;border:1px solid rgba(249,115,22,0.3);padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600}
+.badge-muted{background:rgba(90,120,160,0.1);color:#7090b0;border:1px solid rgba(90,120,160,0.2);padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600}
 </style>
 </head>
 <body>
@@ -1637,6 +1791,9 @@ select.form-inp option{background:#0d1628}
       <button class="office-tab" id="otab-m365" onclick="switchOfficeTab('m365')">
         <i data-lucide="mail" style="width:13px;height:13px"></i> Microsoft 365
       </button>
+      <button class="office-tab" id="otab-history" onclick="switchOfficeTab('history')">
+        <i data-lucide="clock" style="width:13px;height:13px"></i> History
+      </button>
     </div>
 
     <!-- ── Tab: Employees ── -->
@@ -1862,8 +2019,96 @@ select.form-inp option{background:#0d1628}
       </div>
     </div>
 
+    <!-- ── Tab: History ── -->
+    <div class="office-tab-panel" id="otp-history" style="display:none">
+      <div class="hist-layout">
+        <!-- Toolbar -->
+        <div class="hist-toolbar">
+          <select class="hist-emp-sel" id="hist-emp-sel" onchange="loadEmployeeHistory()">
+            <option value="aria">ARIA — NOC Analyst</option>
+            <option value="nexus">NEXUS — Infra Engineer</option>
+            <option value="cipher">CIPHER — Security Analyst</option>
+            <option value="vega">VEGA — SRE</option>
+          </select>
+          <button class="hist-filter-btn active" data-filter="" onclick="setHistFilter(this)">All</button>
+          <button class="hist-filter-btn" data-filter="workflow" onclick="setHistFilter(this)">Workflows</button>
+          <button class="hist-filter-btn" data-filter="incident" onclick="setHistFilter(this)">Incidents</button>
+          <button class="hist-filter-btn" data-filter="message" onclick="setHistFilter(this)">Messages</button>
+          <button class="hist-filter-btn" data-filter="shift" onclick="setHistFilter(this)">Shifts</button>
+          <button class="hist-filter-btn" data-filter="memory" onclick="setHistFilter(this)">Memory</button>
+          <button onclick="loadEmployeeHistory()" style="padding:4px 12px;border-radius:5px;font-size:10px;border:1px solid var(--border2);background:rgba(255,255,255,0.03);color:var(--muted);cursor:pointer;margin-left:auto">↻ Refresh</button>
+        </div>
+        <!-- History list -->
+        <div class="hist-list" id="hist-list">
+          <div style="color:var(--muted);font-size:12px;padding:24px;text-align:center">
+            Select an employee and click Refresh to view their history.
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div><!-- /main-area -->
+
+<!-- ══ FEEDBACK MODAL ══ -->
+<div id="feedback-modal" class="feedback-modal-overlay">
+  <div class="feedback-modal">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div class="feedback-modal-title" id="feedback-modal-title">Event Feedback</div>
+      <button onclick="closeFeedbackModal()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div class="feedback-comments" id="feedback-comments-list">
+      <div style="color:var(--muted);font-size:11px">Loading...</div>
+    </div>
+    <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Rate this response</div>
+    <div class="feedback-rating-row">
+      <button class="feedback-rating-btn" data-rating="3" onclick="selectFeedbackRating(3)">✓ Correct</button>
+      <button class="feedback-rating-btn" data-rating="2" onclick="selectFeedbackRating(2)">~ Acceptable</button>
+      <button class="feedback-rating-btn" data-rating="1" onclick="selectFeedbackRating(1)">✗ Wrong</button>
+    </div>
+    <textarea id="feedback-comment-input" class="feedback-textarea" placeholder="Add a comment for the AI to learn from... (e.g. 'Should have escalated sooner', 'Next time check ISP first', 'This response was correct but too verbose')"></textarea>
+    <div style="display:flex;align-items:center;gap:10px">
+      <button class="feedback-submit-btn" onclick="submitFeedback()">Save Feedback</button>
+      <span id="feedback-submit-status" style="font-size:10px;color:var(--muted)"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ══ INSTRUCTIONS EDITOR MODAL ══ -->
+<div id="instr-modal" class="instr-modal-overlay">
+  <div class="instr-modal">
+    <div class="instr-modal-hdr">
+      <div class="instr-modal-title" id="instr-modal-title">Edit Instructions</div>
+      <button onclick="closeInstrModal()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;line-height:1">✕</button>
+    </div>
+
+    <!-- Employee type selector -->
+    <div style="margin-bottom:14px">
+      <div class="instr-section-lbl">Load template for employee type</div>
+      <div class="instr-type-row" id="instr-type-chips">
+        <!-- chips loaded by JS -->
+      </div>
+    </div>
+
+    <div class="instr-section-lbl">Identity &amp; Personality</div>
+    <textarea id="instr-identity" class="instr-textarea" rows="5" placeholder="Who is this employee? What is their personality, background, voice?"></textarea>
+
+    <div class="instr-section-lbl">Expertise &amp; Tools</div>
+    <textarea id="instr-expertise" class="instr-textarea" rows="4" placeholder="What do they know? What tools, domains, systems are they expert in?"></textarea>
+
+    <div class="instr-section-lbl">Communication Style</div>
+    <textarea id="instr-communication" class="instr-textarea" rows="4" placeholder="How should they adapt their responses? Format rules, tone guidelines..."></textarea>
+
+    <div class="instr-section-lbl">Rules &amp; Constraints</div>
+    <textarea id="instr-constraints" class="instr-textarea" rows="3" placeholder="Hard rules they never break. Safety constraints. Escalation triggers..."></textarea>
+
+    <div style="display:flex;align-items:center;gap:10px">
+      <button class="instr-save-btn" onclick="saveEmployeeInstructions()">Save Instructions</button>
+      <button class="instr-reset-btn" onclick="resetEmployeeInstructions()">Reset to Defaults</button>
+      <span id="instr-status" class="instr-status"></span>
+    </div>
+  </div>
+</div>
 
 <!-- ══ WORKFLOW CREATE/EDIT MODAL ══ -->
 <div id="wf-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:900;align-items:center;justify-content:center">
@@ -3910,7 +4155,7 @@ function navigate(page){
   if(page==='intel')    initIntelPage();
   if(page==='map')      setTimeout(()=>visNetwork.fit({animation:{duration:400}}),50);
   if(page==='hreality') renderHRealityPage();
-  if(page==='office')   { renderOfficePage(); updateOfficeHealthPct(); }
+  if(page==='office')   { renderOfficePage(); updateOfficeHealthPct(); setTimeout(loadEmployeeTypeBadges, 800); }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -4976,8 +5221,9 @@ function toggleAutoCollab() {
 //  OFFICE PAGE TABS
 // ═══════════════════════════════════════════════════════════
 function switchOfficeTab(tab) {
-  ['employees','teamchat','workflows','vault','whatsapp','m365'].forEach(t => {
-    document.getElementById(`otp-${t}`).style.display = t === tab ? '' : 'none';
+  ['employees','teamchat','workflows','vault','whatsapp','m365','history'].forEach(t => {
+    const panel = document.getElementById(`otp-${t}`);
+    if (panel) panel.style.display = t === tab ? '' : 'none';
     const btn = document.getElementById(`otab-${t}`);
     if (btn) btn.classList.toggle('active', t === tab);
   });
@@ -4987,6 +5233,13 @@ function switchOfficeTab(tab) {
   if (tab === 'vault')     loadVault();
   if (tab === 'whatsapp')  loadWAStatus();
   if (tab === 'm365')      loadM365Status();
+  if (tab === 'history')   loadEmployeeHistory();
+}
+
+function switchOfficeTabAndShowHistory(empId) {
+  switchOfficeTab('history');
+  const sel = document.getElementById('hist-emp-sel');
+  if (sel) { sel.value = empId; loadEmployeeHistory(); }
 }
 
 document.addEventListener('keydown', e => {
@@ -4995,6 +5248,8 @@ document.addEventListener('keydown', e => {
     document.getElementById('wf-runs-modal').style.display   = 'none';
     document.getElementById('emp-memory-modal').style.display = 'none';
     document.getElementById('vault-modal').style.display     = 'none';
+    closeFeedbackModal();
+    closeInstrModal();
   }
 });
 
@@ -5032,6 +5287,270 @@ async function showEmpMemory(empId) {
     </div>
   `).join('');
 }
+
+// ═══════════════════════════════════════════════════════════
+//  EMPLOYEE HISTORY TAB
+// ═══════════════════════════════════════════════════════════
+
+let _histFilter = '';
+let _empTypes   = [];  // loaded from API once
+
+const HIST_TYPE_LABELS = {
+  workflow: 'WORKFLOW', incident: 'INCIDENT', message: 'MESSAGE',
+  shift: 'SHIFT', memory: 'MEMORY'
+};
+const HIST_TYPE_CLASSES = {
+  workflow: 'hist-type-workflow', incident: 'hist-type-incident',
+  message: 'hist-type-message',  shift: 'hist-type-shift', memory: 'hist-type-memory'
+};
+const HIST_TYPE_ICONS = {
+  workflow: '⚙️', incident: '🚨', message: '💬', shift: '🌙', memory: '🧠'
+};
+
+function setHistFilter(btn) {
+  _histFilter = btn.dataset.filter;
+  document.querySelectorAll('.hist-filter-btn').forEach(b => b.classList.toggle('active', b === btn));
+  loadEmployeeHistory();
+}
+
+async function loadEmployeeHistory() {
+  const empId = document.getElementById('hist-emp-sel')?.value || 'aria';
+  const list = document.getElementById('hist-list');
+  list.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:24px;text-align:center">Loading history...</div>';
+
+  const params = new URLSearchParams({ limit: 60 });
+  if (_histFilter) params.set('event_type', _histFilter);
+
+  const data = await api(`/api/office/history/${empId}?${params}`);
+  if (!data || !data.events || !data.events.length) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:24px;text-align:center">No history yet — run tasks, handle incidents, or exchange messages to see activity here.</div>';
+    return;
+  }
+
+  list.innerHTML = data.events.map(ev => {
+    const typeClass = HIST_TYPE_CLASSES[ev.event_type] || 'badge-muted';
+    const typeIcon  = HIST_TYPE_ICONS[ev.event_type] || '📌';
+    const typeLabel = HIST_TYPE_LABELS[ev.event_type] || ev.event_type.toUpperCase();
+    const time = ev.created_at ? new Date(ev.created_at).toLocaleString() : '';
+    const outcomeHtml = ev.outcome && ev.outcome !== 'unknown' ? `<span class="hist-outcome-badge hist-outcome-${ev.outcome}">${ev.outcome.toUpperCase()}</span>` : '';
+    const feedbackHtml = `<span class="hist-feedback-pill" onclick="openFeedbackModal('${empId}','${ev.event_type}',${ev.event_id},'${(ev.title||'').replace(/'/g,"\\'")}')">💬 ${ev.feedback_count>0 ? ev.feedback_count+' comment'+(ev.feedback_count!==1?'s':'') : 'Add comment'}</span>`;
+
+    return `<div class="hist-event">
+      <div class="hist-event-top">
+        <span class="${typeClass} hist-type-chip">${typeIcon} ${typeLabel}</span>
+        <span class="hist-event-title">${_escHtml(ev.title||'')}</span>
+        <span class="hist-event-time">${time}</span>
+      </div>
+      <div class="hist-event-summary">${_escHtml(ev.summary||'(no preview)')}</div>
+      <div class="hist-event-footer">
+        ${outcomeHtml}
+        ${ev.status ? `<span class="badge-muted">${ev.status}</span>` : ''}
+        ${feedbackHtml}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function _escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//  FEEDBACK MODAL
+// ═══════════════════════════════════════════════════════════
+
+let _feedbackState = { empId:'', eventType:'', eventId:0, rating:null };
+
+async function openFeedbackModal(empId, eventType, eventId, title) {
+  _feedbackState = { empId, eventType, eventId, rating: null };
+  document.getElementById('feedback-modal-title').textContent = `Feedback — ${title.substring(0,60)}`;
+  document.getElementById('feedback-comment-input').value = '';
+  document.getElementById('feedback-submit-status').textContent = '';
+  document.querySelectorAll('.feedback-rating-btn').forEach(b => b.classList.remove('sel'));
+  document.getElementById('feedback-modal').classList.add('open');
+
+  // Load existing comments
+  const clist = document.getElementById('feedback-comments-list');
+  clist.innerHTML = '<div style="color:var(--muted);font-size:11px">Loading...</div>';
+  const data = await api(`/api/office/feedback/${empId}/${eventType}/${eventId}`);
+  if (!data || !data.feedback || !data.feedback.length) {
+    clist.innerHTML = '<div style="color:var(--muted);font-size:11px;font-style:italic">No comments yet — be the first to add feedback.</div>';
+  } else {
+    const ratingLabels = {1:'✗ Wrong', 2:'~ Ok', 3:'✓ Correct'};
+    clist.innerHTML = data.feedback.map(f => `
+      <div class="feedback-comment">
+        <div class="feedback-comment-text">${_escHtml(f.comment)}</div>
+        <div class="feedback-comment-meta">${f.rating ? ratingLabels[f.rating]+' · ' : ''}${f.created_by} · ${f.created_at ? new Date(f.created_at).toLocaleString() : ''}</div>
+      </div>
+    `).join('');
+  }
+}
+
+function closeFeedbackModal() {
+  document.getElementById('feedback-modal').classList.remove('open');
+}
+
+function selectFeedbackRating(r) {
+  _feedbackState.rating = r;
+  document.querySelectorAll('.feedback-rating-btn').forEach(b => b.classList.toggle('sel', parseInt(b.dataset.rating) === r));
+}
+
+async function submitFeedback() {
+  const comment = document.getElementById('feedback-comment-input').value.trim();
+  const status  = document.getElementById('feedback-submit-status');
+  if (!comment && !_feedbackState.rating) { status.textContent = 'Add a comment or rating first.'; return; }
+
+  status.textContent = 'Saving...';
+  const r = await api('/api/office/feedback', {
+    method: 'POST',
+    body: JSON.stringify({
+      employee_id: _feedbackState.empId,
+      event_type:  _feedbackState.eventType,
+      event_id:    _feedbackState.eventId,
+      comment:     comment || '(rating only)',
+      rating:      _feedbackState.rating,
+    })
+  });
+  if (r?.ok) {
+    status.textContent = '✓ Feedback saved — the AI will learn from this.';
+    document.getElementById('feedback-comment-input').value = '';
+    _feedbackState.rating = null;
+    document.querySelectorAll('.feedback-rating-btn').forEach(b => b.classList.remove('sel'));
+    // Reload history to update feedback count
+    setTimeout(() => loadEmployeeHistory(), 600);
+  } else {
+    status.textContent = 'Error saving feedback.';
+  }
+}
+
+// Close feedback modal on overlay click
+document.getElementById('feedback-modal')?.addEventListener('click', function(e) {
+  if (e.target === this) closeFeedbackModal();
+});
+
+
+// ═══════════════════════════════════════════════════════════
+//  INSTRUCTIONS EDITOR MODAL
+// ═══════════════════════════════════════════════════════════
+
+let _instrEmpId = '';
+
+async function openInstrModal(empId) {
+  _instrEmpId = empId;
+  const names = {aria:'ARIA',nexus:'NEXUS',cipher:'CIPHER',vega:'VEGA'};
+  document.getElementById('instr-modal-title').textContent = `${names[empId]||empId.toUpperCase()} — Edit Instructions`;
+  document.getElementById('instr-status').textContent = '';
+  document.getElementById('instr-modal').classList.add('open');
+
+  // Load employee types if not already loaded
+  if (!_empTypes.length) {
+    const types = await api('/api/office/employee-types') || [];
+    _empTypes = types;
+  }
+
+  // Build type chips
+  const chipsEl = document.getElementById('instr-type-chips');
+  chipsEl.innerHTML = _empTypes.map(t =>
+    `<button class="instr-type-chip" data-type="${t.key}" onclick="loadTypeInstructions('${t.key}')">${t.icon} ${t.label}</button>`
+  ).join('');
+
+  // Load current instructions
+  const data = await api(`/api/office/profiles/${empId}/instructions`);
+  if (data) {
+    document.getElementById('instr-identity').value      = data.instruction_identity      || '';
+    document.getElementById('instr-expertise').value     = data.instruction_expertise     || '';
+    document.getElementById('instr-communication').value = data.instruction_communication || '';
+    document.getElementById('instr-constraints').value   = data.instruction_constraints   || '';
+  }
+}
+
+function closeInstrModal() {
+  document.getElementById('instr-modal').classList.remove('open');
+}
+
+async function loadTypeInstructions(typeKey) {
+  // Mark active chip
+  document.querySelectorAll('.instr-type-chip').forEach(c =>
+    c.classList.toggle('sel', c.dataset.type === typeKey)
+  );
+
+  const data = await api(`/api/office/employee-types/${typeKey}/instructions`);
+  if (data) {
+    document.getElementById('instr-identity').value      = data.identity      || '';
+    document.getElementById('instr-expertise').value     = data.expertise     || '';
+    document.getElementById('instr-communication').value = data.communication || '';
+    document.getElementById('instr-constraints').value   = data.constraints   || '';
+    document.getElementById('instr-status').textContent = `✓ Loaded ${data.label} template — edit as needed, then Save.`;
+
+    // Update employee type
+    await api(`/api/office/profiles/${_instrEmpId}/type`, {
+      method: 'PUT', body: JSON.stringify({ employee_type: typeKey })
+    });
+    // Update the type badge in the card
+    const typeLabel = document.getElementById(`emp-${_instrEmpId}-type-label`);
+    if (typeLabel) typeLabel.textContent = data.label;
+  }
+}
+
+async function saveEmployeeInstructions() {
+  const status = document.getElementById('instr-status');
+  status.textContent = 'Saving...';
+  const r = await api(`/api/office/profiles/${_instrEmpId}/instructions`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      instruction_identity:      document.getElementById('instr-identity').value,
+      instruction_expertise:     document.getElementById('instr-expertise').value,
+      instruction_communication: document.getElementById('instr-communication').value,
+      instruction_constraints:   document.getElementById('instr-constraints').value,
+    })
+  });
+  if (r?.ok) {
+    status.textContent = '✓ Instructions saved — will take effect on next task.';
+  } else {
+    status.textContent = 'Error saving instructions.';
+  }
+}
+
+async function resetEmployeeInstructions() {
+  if (!confirm(`Reset ${_instrEmpId.toUpperCase()} instructions back to built-in defaults?`)) return;
+  const status = document.getElementById('instr-status');
+  status.textContent = 'Resetting...';
+  const r = await api(`/api/office/profiles/${_instrEmpId}/instructions/reset`, { method: 'POST' });
+  if (r?.ok) {
+    // Reload instructions
+    const data = await api(`/api/office/profiles/${_instrEmpId}/instructions`);
+    if (data) {
+      document.getElementById('instr-identity').value      = data.instruction_identity      || '';
+      document.getElementById('instr-expertise').value     = data.instruction_expertise     || '';
+      document.getElementById('instr-communication').value = data.instruction_communication || '';
+      document.getElementById('instr-constraints').value   = data.instruction_constraints   || '';
+    }
+    status.textContent = '✓ Instructions reset to defaults.';
+  }
+}
+
+// Close instructions modal on overlay click
+document.getElementById('instr-modal')?.addEventListener('click', function(e) {
+  if (e.target === this) closeInstrModal();
+});
+
+// On office page load, fetch employee types for badge labels
+async function loadEmployeeTypeBadges() {
+  if (!_empTypes.length) {
+    const types = await api('/api/office/employee-types');
+    if (types) _empTypes = types;
+  }
+  for (const emp of OFFICE_EMP) {
+    const profileData = await api(`/api/office/profiles/${emp.id}`);
+    if (profileData?.employee_type) {
+      const typeInfo = _empTypes.find(t => t.key === profileData.employee_type);
+      const lbl = document.getElementById(`emp-${emp.id}-type-label`);
+      if (lbl && typeInfo) lbl.textContent = typeInfo.label;
+    }
+  }
+}
+
 
 // ═══════════════════════════════════════════════════════════
 //  WORKFLOW BUILDER
@@ -6224,6 +6743,7 @@ function _buildEmpCard(e) {
     <div class="emp-info">
       <div class="emp-name" style="color:${e.color}">${e.name}</div>
       <div class="emp-role">${e.role}</div>
+      <div class="emp-type-badge" id="emp-${e.id}-type-badge" onclick="openInstrModal('${e.id}')" title="Click to edit instructions &amp; employee type">✏️ <span id="emp-${e.id}-type-label">NOC Analyst</span></div>
     </div>
     <div class="emp-tag idle" id="emp-${e.id}-tag">IDLE</div>
   </div>
@@ -6249,6 +6769,7 @@ function _buildEmpCard(e) {
     <button onclick="officeRunTask('${e.id}','research')" class="emp-btn" style="--btn-color:${e.color}">Research</button>
     <button onclick="officeRunTask('${e.id}','improvement')" class="emp-btn" style="--btn-color:${e.color}">Improve</button>
     <button onclick="showEmpMemory('${e.id}')" class="emp-btn" style="--btn-color:${e.color}" title="View memory & learnings">🧠</button>
+    <button onclick="switchOfficeTabAndShowHistory('${e.id}')" class="emp-btn" style="--btn-color:${e.color}" title="View activity history">📋</button>
     <button onclick="document.getElementById('emp-${e.id}-file-input').click()" class="emp-btn" style="--btn-color:${e.color}" title="Attach files (images, PDF, DOCX, PPTX)">📎</button>
     <button onclick="officeStopTask('${e.id}')" class="emp-btn emp-btn-stop" id="emp-${e.id}-stop" style="display:none">■ Stop</button>
   </div>

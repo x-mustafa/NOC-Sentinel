@@ -2,13 +2,14 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from contextlib import asynccontextmanager
 import logging
 import os
 
 from app.config import settings
 from app.database import close_pool, run_migration
-from app.routers import auth, zabbix, nodes, users, discover, import_router, chat, office, workflows, vault, ms365
+from app.routers import auth, zabbix, nodes, users, discover, import_router, chat, office, workflows, vault, ms365, incidents, messages, runbooks, sla
 from app.services.workflow_engine import start_engine, stop_engine
 
 logging.basicConfig(level=logging.INFO)
@@ -29,16 +30,28 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="NOC Sentinel", version="2.0.0", lifespan=lifespan)
 
+# ── Security headers middleware ────────────────────────────────────────────────
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        response.headers["X-Frame-Options"]        = "DENY"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"]        = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"]     = "geolocation=(), camera=(), microphone=()"
+        return response
+
+app.add_middleware(SecurityHeadersMiddleware)
+
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.app_secret,
     max_age=settings.session_max_age,
     same_site="lax",
-    https_only=False,
+    https_only=False,   # set True when HTTPS is terminated by nginx in front
     session_cookie="noc_session",
 )
 
-# API routers
+# ── API routers ────────────────────────────────────────────────────────────────
 app.include_router(auth.router,          prefix="/api/auth",      tags=["auth"])
 app.include_router(zabbix.router,        prefix="/api/zabbix",    tags=["zabbix"])
 app.include_router(nodes.router,         prefix="/api/nodes",     tags=["nodes"])
@@ -51,8 +64,24 @@ app.include_router(office.router,        prefix="/api/office",    tags=["office"
 app.include_router(workflows.router,     prefix="/api/workflows", tags=["workflows"])
 app.include_router(vault.router)
 app.include_router(ms365.router,         prefix="/api/ms365",     tags=["ms365"])
+app.include_router(incidents.router,     prefix="/api/incidents", tags=["incidents"])
+app.include_router(messages.router,     prefix="/api/messages",  tags=["messages"])
+app.include_router(runbooks.router,     prefix="/api/runbooks",  tags=["runbooks"])
+app.include_router(sla.router,          prefix="/api/sla",       tags=["sla"])
 
-# Static files
+# ── Health check ───────────────────────────────────────────────────────────────
+@app.get("/api/health", tags=["health"])
+async def health():
+    """Liveness + readiness probe. Returns 200 if DB is reachable."""
+    try:
+        from app.database import fetch_one
+        await fetch_one("SELECT 1")
+        return {"status": "ok", "db": "connected"}
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return JSONResponse({"status": "error", "db": str(e)}, status_code=503)
+
+# ── Static files ───────────────────────────────────────────────────────────────
 static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
 static_dir = os.path.normpath(static_dir)
 if os.path.isdir(static_dir):
@@ -74,11 +103,13 @@ async def index():
 async def spa_fallback(path: str):
     if path.startswith("api/"):
         return JSONResponse({"error": "Not found"}, status_code=404)
-    # Serve static files directly (images, fonts, etc.)
-    file_path = os.path.join(static_dir, path)
+    # Guard against path traversal
+    file_path = os.path.normpath(os.path.join(static_dir, path))
+    if not file_path.startswith(static_dir + os.sep) and file_path != static_dir:
+        return JSONResponse({"error": "Not found"}, status_code=404)
     if os.path.isfile(file_path):
         return FileResponse(file_path)
-    # SPA fallback — return index.html for everything else
+    # SPA fallback — return index.html for all non-API, non-file routes
     html_path = os.path.join(static_dir, "index.html")
     if os.path.isfile(html_path):
         return FileResponse(html_path, headers=_NO_CACHE)

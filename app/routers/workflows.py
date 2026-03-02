@@ -1,7 +1,8 @@
 import json
+import os
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
-from typing import Optional, List
+from pydantic import BaseModel, Field, validator
+from typing import Optional, Literal
 
 from app.deps import get_session, require_admin, require_operator
 from app.database import fetch_all, fetch_one, execute
@@ -9,17 +10,30 @@ from app.services.workflow_engine import trigger_workflow_manually, reload_sched
 
 router = APIRouter()
 
+WA_SERVICE = os.getenv("WHATSAPP_SERVICE_URL", "http://localhost:3001")
+
+_VALID_EMPLOYEES = {"aria", "nexus", "cipher", "vega"}
+
 
 class WorkflowBody(BaseModel):
-    name: str
-    description: str = ""
-    trigger_type: str = "manual"          # alarm | schedule | threshold | manual
-    trigger_config: Optional[str] = None  # JSON string
-    employee_id: str = "aria"
-    prompt_template: str = "Analyze the current network state and provide a brief status report."
-    action_type: str = "log"              # log | webhook | zabbix_ack | email
-    action_config: Optional[str] = None  # JSON string
-    is_active: bool = True
+    name:            str = Field(..., max_length=120)
+    description:     str = Field("", max_length=500)
+    trigger_type:    Literal["alarm", "schedule", "threshold", "manual"] = "manual"
+    trigger_config:  Optional[str] = None
+    employee_id:     str = "aria"
+    prompt_template: str = Field(
+        "Analyze the current network state and provide a brief status report.",
+        max_length=4000,
+    )
+    action_type:     Literal["log", "webhook", "zabbix_ack", "email", "teams", "whatsapp_group"] = "log"
+    action_config:   Optional[str] = None
+    is_active:       bool = True
+
+    @validator("employee_id")
+    def valid_employee(cls, v):
+        if v not in _VALID_EMPLOYEES:
+            raise ValueError(f"employee_id must be one of: {', '.join(sorted(_VALID_EMPLOYEES))}")
+        return v
 
 
 @router.get("")
@@ -94,11 +108,73 @@ async def manual_trigger(wf_id: int, session: dict = Depends(require_operator)):
 @router.get("/{wf_id}/runs")
 async def get_runs(wf_id: int, session: dict = Depends(get_session)):
     rows = await fetch_all(
-        "SELECT id, trigger_data, ai_response, action_result, status, created_at "
+        "SELECT id, trigger_data, ai_response, action_result, status, "
+        "outcome, outcome_note, outcome_by, outcome_at, created_at "
         "FROM workflow_runs WHERE workflow_id=%s ORDER BY created_at DESC LIMIT 50",
         (wf_id,),
     )
+    for r in rows:
+        r["created_at"] = str(r.get("created_at", ""))
+        r["outcome_at"] = str(r.get("outcome_at", "") or "")
     return rows
+
+
+# ── F5 — Outcome Tracking ───────────────────────────────────────────────────────
+
+class OutcomeBody(BaseModel):
+    outcome:      Literal["correct", "incorrect", "escalated", "ignored"]
+    outcome_note: Optional[str] = Field(None, max_length=1000)
+
+
+@router.post("/{wf_id}/runs/{run_id}/outcome")
+async def mark_run_outcome(
+    wf_id:  int,
+    run_id: int,
+    body:   OutcomeBody,
+    session: dict = Depends(require_operator),
+):
+    """
+    Mark the outcome of a workflow run (correct / incorrect / escalated / ignored).
+    Updates the employee_performance accuracy table automatically.
+    """
+    run = await fetch_one(
+        "SELECT wr.id, wr.status, wr.outcome, w.employee_id, w.trigger_type, w.name "
+        "FROM workflow_runs wr JOIN workflows w ON w.id=wr.workflow_id "
+        "WHERE wr.id=%s AND wr.workflow_id=%s",
+        (run_id, wf_id),
+    )
+    if not run:
+        raise HTTPException(404, "Run not found")
+    if run.get("status") not in ("success", "error"):
+        raise HTTPException(400, "Can only mark completed runs")
+
+    marked_by = session.get("username", "operator")
+    await execute(
+        "UPDATE workflow_runs "
+        "SET outcome=%s, outcome_note=%s, outcome_by=%s, outcome_at=NOW() "
+        "WHERE id=%s",
+        (body.outcome, body.outcome_note, marked_by, run_id),
+    )
+
+    # Update employee_performance aggregate
+    emp_id     = run.get("employee_id") or "aria"
+    task_type  = run.get("trigger_type") or "manual"
+    domain     = (run.get("name") or "workflow")[:100]
+    is_correct = 1 if body.outcome == "correct" else 0
+
+    await execute(
+        "INSERT INTO employee_performance (employee_id, task_type, domain, correct_count, total_count) "
+        "VALUES (%s,%s,%s,%s,1) "
+        "ON DUPLICATE KEY UPDATE "
+        "correct_count = correct_count + %s, "
+        "total_count   = total_count + 1",
+        (emp_id, task_type, domain, is_correct, is_correct),
+    )
+
+    return {"ok": True, "outcome": body.outcome}
+
+
+_BLOCKED_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1", "169.254.169.254"}
 
 
 class TestWebhookBody(BaseModel):
@@ -107,11 +183,17 @@ class TestWebhookBody(BaseModel):
 
 
 @router.post("/test-webhook")
-async def test_webhook(body: TestWebhookBody, session: dict = Depends(get_session)):
-    """Send a test ping to a webhook URL (for n8n testing)."""
+async def test_webhook(body: TestWebhookBody, session: dict = Depends(require_operator)):
+    """Send a test ping to a webhook URL (for n8n testing). Requires operator role."""
+    from urllib.parse import urlparse
     import httpx
+    parsed = urlparse(body.url)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(400, "Only http/https URLs allowed")
+    if (parsed.hostname or "").lower() in _BLOCKED_HOSTS:
+        raise HTTPException(400, "Internal/loopback addresses not allowed for webhook test")
     try:
-        async with httpx.AsyncClient(verify=False, timeout=10) as client:
+        async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(body.url, json=body.payload,
                                      headers={"Content-Type": "application/json",
                                               "X-Source": "NOC-Sentinel-Test"})
@@ -121,8 +203,7 @@ async def test_webhook(body: TestWebhookBody, session: dict = Depends(get_sessio
 
 
 # ── WhatsApp proxy routes (all browser→server→Node.js, so remote browsers work) ──
-
-WA_SERVICE = "http://localhost:3001"
+# WA_SERVICE is defined at module top from WHATSAPP_SERVICE_URL env var
 
 
 async def _wa_get(path: str):

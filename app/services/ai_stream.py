@@ -1,6 +1,6 @@
 """
 Async multi-provider SSE streaming for AI employees.
-Supports: Claude (Anthropic), OpenAI, Gemini, Grok (xAI)
+Supports: Claude (Anthropic), OpenAI, Gemini, Grok (xAI), OpenRouter
 Each function is an async generator yielding SSE dicts for sse_starlette.
 """
 import json
@@ -95,7 +95,8 @@ async def stream_claude(
 async def stream_openai(
     key: str, model: str, system: str, user_msg: str,
     images: list[dict] = None, history: list[dict] = None,
-    api_url: str = "https://api.openai.com/v1/chat/completions"
+    api_url: str = "https://api.openai.com/v1/chat/completions",
+    extra_headers: dict = None,
 ) -> AsyncGenerator[dict, None]:
     images  = images  or []
     history = history or []
@@ -121,6 +122,8 @@ async def stream_openai(
         "messages":  messages,
     }
     headers = {"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
+    if extra_headers:
+        headers.update(extra_headers)
 
     try:
         async with httpx.AsyncClient(verify=False, timeout=TIMEOUT) as client:
@@ -159,7 +162,22 @@ async def stream_grok(
 ) -> AsyncGenerator[dict, None]:
     async for chunk in stream_openai(
         key, model, system, user_msg, images, history,
-        api_url="https://api.x.ai/v1/chat/completions"
+        api_url="https://api.x.ai/v1/chat/completions",
+    ):
+        yield chunk
+
+
+async def stream_openrouter(
+    key: str, model: str, system: str, user_msg: str,
+    images: list[dict] = None, history: list[dict] = None
+) -> AsyncGenerator[dict, None]:
+    async for chunk in stream_openai(
+        key, model, system, user_msg, images, history,
+        api_url="https://openrouter.ai/api/v1/chat/completions",
+        extra_headers={
+            "HTTP-Referer": "https://noc-sentinel.tabadul",
+            "X-Title": "NOC Sentinel",
+        },
     ):
         yield chunk
 
@@ -235,6 +253,8 @@ async def stream_ai(
         gen = stream_grok(key, model, system, user_msg, images, history)
     elif provider == "gemini":
         gen = stream_gemini(key, model, system, user_msg, images, history)
+    elif provider == "openrouter":
+        gen = stream_openrouter(key, model, system, user_msg, images, history)
     else:
         yield _sse_error(f"Unknown provider: {provider}")
         return

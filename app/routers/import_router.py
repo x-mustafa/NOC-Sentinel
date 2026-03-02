@@ -172,7 +172,8 @@ async def save_claude_key(body: SaveKeyBody, session: dict = Depends(require_adm
 @router.get("/aikeys")
 async def get_ai_keys(session: dict = Depends(get_session)):
     cfg = await fetch_one(
-        "SELECT claude_key,openai_key,gemini_key,grok_key,default_ai_provider,default_ai_model "
+        "SELECT claude_key,openai_key,gemini_key,grok_key,openrouter_key,"
+        "default_ai_provider,default_ai_model "
         "FROM zabbix_config LIMIT 1"
     ) or {}
 
@@ -181,10 +182,11 @@ async def get_ai_keys(session: dict = Depends(get_session)):
         return (k[:8] + "*" * 16 + k[-4:]) if len(k) > 12 else ""
 
     return {
-        "claude":           {"has": bool(cfg.get("claude_key")),  "masked": mask(cfg.get("claude_key"))},
-        "openai":           {"has": bool(cfg.get("openai_key")),  "masked": mask(cfg.get("openai_key"))},
-        "gemini":           {"has": bool(cfg.get("gemini_key")),  "masked": mask(cfg.get("gemini_key"))},
-        "grok":             {"has": bool(cfg.get("grok_key")),    "masked": mask(cfg.get("grok_key"))},
+        "claude":           {"has": bool(cfg.get("claude_key")),      "masked": mask(cfg.get("claude_key"))},
+        "openai":           {"has": bool(cfg.get("openai_key")),      "masked": mask(cfg.get("openai_key"))},
+        "gemini":           {"has": bool(cfg.get("gemini_key")),      "masked": mask(cfg.get("gemini_key"))},
+        "grok":             {"has": bool(cfg.get("grok_key")),        "masked": mask(cfg.get("grok_key"))},
+        "openrouter":       {"has": bool(cfg.get("openrouter_key")),  "masked": mask(cfg.get("openrouter_key"))},
         "default_provider": cfg.get("default_ai_provider") or "claude",
         "default_model":    cfg.get("default_ai_model")    or "",
     }
@@ -195,13 +197,14 @@ class SaveAiKeysBody(BaseModel):
     openai_key: Optional[str] = None
     gemini_key: Optional[str] = None
     grok_key: Optional[str] = None
+    openrouter_key: Optional[str] = None
     default_ai_provider: Optional[str] = None
     default_ai_model: Optional[str] = None
 
 
 @router.post("/aikeys")
 async def save_ai_keys(body: SaveAiKeysBody, session: dict = Depends(require_admin)):
-    fields = ["claude_key", "openai_key", "gemini_key", "grok_key",
+    fields = ["claude_key", "openai_key", "gemini_key", "grok_key", "openrouter_key",
               "default_ai_provider", "default_ai_model"]
     sets, vals = [], []
     for f in fields:

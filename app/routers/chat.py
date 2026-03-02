@@ -54,7 +54,8 @@ async def chat(body: ChatBody, session: dict = Depends(get_session)):
     provider = cfg.get("default_ai_provider") or "claude"
     model    = cfg.get("default_ai_model")    or ""
     key_map  = {"claude": "claude_key", "openai": "openai_key",
-                "gemini": "gemini_key", "grok": "grok_key"}
+                "gemini": "gemini_key", "grok": "grok_key",
+                "openrouter": "openrouter_key"}
     api_key  = cfg.get(key_map.get(provider, "claude_key"), "")
 
     # Fallback to claude_key if default provider key missing
@@ -63,10 +64,11 @@ async def chat(body: ChatBody, session: dict = Depends(get_session)):
         provider = "claude"
 
     if not api_key:
-        raise HTTPException(400, "Claude API key not configured — go to Settings → AI Providers")
+        raise HTTPException(400, "AI API key not configured — go to Settings → AI Providers")
 
     model_defaults = {"claude": "claude-sonnet-4-6", "openai": "gpt-4o",
-                      "gemini": "gemini-2.0-flash", "grok": "grok-2-latest"}
+                      "gemini": "gemini-2.0-flash", "grok": "grok-2-latest",
+                      "openrouter": "anthropic/claude-3.5-haiku"}
     if not model:
         model = model_defaults.get(provider, "claude-sonnet-4-6")
 

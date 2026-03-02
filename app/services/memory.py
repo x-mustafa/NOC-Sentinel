@@ -13,6 +13,11 @@ logger = logging.getLogger(__name__)
 MAX_MEMORY_INJECT = 8   # how many past memories to inject per task
 MAX_MEMORY_STORE  = 200  # keep at most this many per employee
 
+_OPENROUTER_HEADERS = {
+    "HTTP-Referer": "https://noc-sentinel.tabadul",
+    "X-Title": "NOC Sentinel",
+}
+
 
 async def get_memory_context(employee_id: str) -> str:
     """Fetch recent memories and format them for system prompt injection."""
@@ -68,6 +73,13 @@ async def save_memory(
         elif provider in ("openai", "grok"):
             url = "https://api.openai.com/v1/chat/completions" if provider == "openai" else "https://api.x.ai/v1/chat/completions"
             result = await _call_openai_compat(api_key, model, url, extraction_prompt)
+        elif provider == "openrouter":
+            result = await _call_openai_compat(
+                api_key, model,
+                "https://openrouter.ai/api/v1/chat/completions",
+                extraction_prompt,
+                extra_headers=_OPENROUTER_HEADERS,
+            )
         elif provider == "gemini":
             result = await _call_gemini(api_key, model, extraction_prompt)
     except Exception as e:
@@ -100,6 +112,42 @@ async def save_memory(
     )
 
 
+async def save_memory_direct(
+    employee_id: str,
+    task_type: str,
+    task_summary: str,
+    key_learnings: str,
+) -> None:
+    """
+    Save a memory entry without a secondary AI summarisation call.
+    Use this for workflow runs, peer messages, and other automated contexts
+    where the summary and learnings are already known.
+    """
+    if not task_summary and not key_learnings:
+        return
+    try:
+        await execute(
+            "INSERT INTO employee_memory "
+            "(employee_id, task_type, task_summary, key_learnings) "
+            "VALUES (%s,%s,%s,%s)",
+            (
+                employee_id,
+                task_type,
+                str(task_summary)[:500],
+                str(key_learnings)[:1000],
+            ),
+        )
+        # Prune old memories
+        await execute(
+            "DELETE FROM employee_memory WHERE employee_id = %s AND id NOT IN "
+            "(SELECT id FROM (SELECT id FROM employee_memory WHERE employee_id = %s "
+            "ORDER BY created_at DESC LIMIT %s) t)",
+            (employee_id, employee_id, MAX_MEMORY_STORE),
+        )
+    except Exception as e:
+        logger.warning(f"save_memory_direct({employee_id}) failed: {e}")
+
+
 async def get_memories(employee_id: str, limit: int = 50) -> list[dict]:
     return await fetch_all(
         "SELECT id, task_type, task_summary, key_learnings, created_at "
@@ -122,11 +170,16 @@ async def _call_claude(key: str, model: str, prompt: str) -> str | None:
         return data.get("content", [{}])[0].get("text")
 
 
-async def _call_openai_compat(key: str, model: str, url: str, prompt: str) -> str | None:
+async def _call_openai_compat(
+    key: str, model: str, url: str, prompt: str, extra_headers: dict = None
+) -> str | None:
+    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+    if extra_headers:
+        headers.update(extra_headers)
     async with httpx.AsyncClient(verify=False, timeout=30) as client:
         resp = await client.post(
             url,
-            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            headers=headers,
             json={"model": model, "max_tokens": 300,
                   "messages": [{"role": "user", "content": prompt}]},
         )

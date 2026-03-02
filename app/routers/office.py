@@ -12,14 +12,26 @@ import base64
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
-from typing import Optional, List, Any
+from pydantic import BaseModel, Field
+from typing import Optional, List, Any, Literal
 
 from app.deps import get_session, require_admin
 from app.database import fetch_one, fetch_all, execute
 from app.services.ai_stream import stream_ai
 from app.services.doc_extract import extract_doc_text
 from app.services.memory import get_memory_context, save_memory, get_memories
+from app.services.employee_prompt import (
+    build_employee_system_prompt,
+    compile_prompt,
+    DEFAULT_INSTRUCTIONS,
+    EMPLOYEE_TYPES,
+    EMPLOYEE_TYPE_INSTRUCTIONS,
+)
+from app.services.employee_context import (
+    get_full_operational_context,
+    set_employee_status,
+    set_employee_available,
+)
 
 router = APIRouter()
 
@@ -183,10 +195,11 @@ DEFAULT_TASKS = {
 }
 
 MODEL_DEFAULTS = {
-    "claude": "claude-sonnet-4-6",
-    "openai": "gpt-4o",
-    "gemini": "gemini-2.0-flash",
-    "grok":   "grok-2-latest",
+    "claude":      "claude-sonnet-4-6",
+    "openai":      "gpt-4o",
+    "gemini":      "gemini-2.0-flash",
+    "grok":        "grok-2-latest",
+    "openrouter":  "anthropic/claude-3.5-haiku",
 }
 
 
@@ -235,14 +248,15 @@ async def run_task(body: RunTaskBody, session: dict = Depends(get_session)):
     model    = body.model_id or cfg.get("default_ai_model") or MODEL_DEFAULTS.get(provider, "claude-sonnet-4-6")
 
     key_map = {"claude": "claude_key", "openai": "openai_key",
-               "gemini": "gemini_key", "grok": "grok_key"}
+               "gemini": "gemini_key", "grok": "grok_key",
+               "openrouter": "openrouter_key"}
     api_key = cfg.get(key_map.get(provider, "claude_key"), "")
     if not api_key:
         raise HTTPException(400, f"{provider} API key not configured — go to Settings → AI Providers")
 
-    # Load employee profile (use custom prompt if set)
+    # Load employee profile + assemble system prompt from structured instructions
     profile = await fetch_one("SELECT * FROM employee_profiles WHERE id=%s", (employee,)) or {}
-    persona = profile.get("system_prompt") or DEFAULT_PERSONAS[employee]
+    persona = await build_employee_system_prompt(employee) or DEFAULT_PERSONAS[employee]
 
     # Build task prompt
     if task_type == "custom":
@@ -281,6 +295,9 @@ async def run_task(body: RunTaskBody, session: dict = Depends(get_session)):
 
     # Load employee memory
     memory_ctx = await get_memory_context(employee)
+
+    # Load real-time operational context (open incidents, shift state)
+    ops_ctx = await get_full_operational_context(employee)
 
     # Load vault entries shared with AI
     vault_ctx = ""
@@ -348,6 +365,7 @@ async def run_task(body: RunTaskBody, session: dict = Depends(get_session)):
     system_prompt = (
         persona
         + length_rule
+        + ops_ctx
         + "\n\n---- CURRENT LIVE NETWORK STATUS ----\n"
         + ctx
         + vault_ctx
@@ -427,13 +445,13 @@ async def run_task_sync(body: RunSyncBody):
     model    = body.model_id or cfg.get("default_ai_model") or MODEL_DEFAULTS.get(provider, "claude-sonnet-4-6")
 
     key_map = {"claude": "claude_key", "openai": "openai_key",
-               "gemini": "gemini_key", "grok": "grok_key"}
+               "gemini": "gemini_key", "grok": "grok_key",
+               "openrouter": "openrouter_key"}
     api_key = cfg.get(key_map.get(provider, "claude_key"), "")
     if not api_key:
         raise HTTPException(400, f"{provider} API key not configured")
 
-    profile = await fetch_one("SELECT * FROM employee_profiles WHERE id=%s", (employee,)) or {}
-    persona = profile.get("system_prompt") or DEFAULT_PERSONAS[employee]
+    persona = await build_employee_system_prompt(employee) or DEFAULT_PERSONAS[employee]
 
     task_prompt = body.custom_task or DEFAULT_TASKS.get(task_type, DEFAULT_TASKS["daily"]).get(employee, "Help the user.")
 
@@ -456,6 +474,9 @@ async def run_task_sync(body: RunSyncBody):
 
     memory_ctx = await get_memory_context(employee)
 
+    # Load real-time operational context (open incidents, shift state)
+    ops_ctx = await get_full_operational_context(employee)
+
     # WhatsApp context note
     wa_ctx = ""
     if body.whatsapp_from:
@@ -465,6 +486,7 @@ async def run_task_sync(body: RunSyncBody):
         persona
         + "\n\nRESPONSE LENGTH: Match the response to what was asked. No preamble, no closing remarks."
         + wa_ctx
+        + ops_ctx
         + "\n\n---- LIVE NETWORK STATUS ----\nNetwork data not available in sync mode."
         + vault_ctx
         + memory_ctx
@@ -569,6 +591,127 @@ async def update_profile(
     return {"ok": True}
 
 
+# ── EMPLOYEE INSTRUCTIONS ──────────────────────────────────────────────────────
+
+@router.get("/profiles/{employee_id}/instructions")
+async def get_instructions(employee_id: str, session: dict = Depends(get_session)):
+    """Return the 4 structured instruction sections for an employee."""
+    if employee_id not in DEFAULT_PERSONAS:
+        raise HTTPException(404, "Unknown employee")
+
+    row = await fetch_one(
+        "SELECT instruction_identity, instruction_expertise, "
+        "instruction_communication, instruction_constraints "
+        "FROM employee_profiles WHERE id=%s",
+        (employee_id,),
+    )
+    defaults = DEFAULT_INSTRUCTIONS.get(employee_id, {})
+    return {
+        "employee_id":            employee_id,
+        "instruction_identity":   (row or {}).get("instruction_identity")   or defaults.get("identity",      ""),
+        "instruction_expertise":  (row or {}).get("instruction_expertise")  or defaults.get("expertise",     ""),
+        "instruction_communication": (row or {}).get("instruction_communication") or defaults.get("communication", ""),
+        "instruction_constraints": (row or {}).get("instruction_constraints") or defaults.get("constraints", ""),
+    }
+
+
+class InstructionUpdateBody(BaseModel):
+    instruction_identity:      Optional[str] = None
+    instruction_expertise:     Optional[str] = None
+    instruction_communication: Optional[str] = None
+    instruction_constraints:   Optional[str] = None
+
+
+@router.put("/profiles/{employee_id}/instructions")
+async def update_instructions(
+    employee_id: str,
+    body: InstructionUpdateBody,
+    session: dict = Depends(require_admin),
+):
+    """Update one or more instruction sections for an employee."""
+    if employee_id not in DEFAULT_PERSONAS:
+        raise HTTPException(404, "Unknown employee")
+
+    sets, vals = [], []
+    if body.instruction_identity      is not None:
+        sets.append("instruction_identity=%s");      vals.append(body.instruction_identity or None)
+    if body.instruction_expertise     is not None:
+        sets.append("instruction_expertise=%s");     vals.append(body.instruction_expertise or None)
+    if body.instruction_communication is not None:
+        sets.append("instruction_communication=%s"); vals.append(body.instruction_communication or None)
+    if body.instruction_constraints   is not None:
+        sets.append("instruction_constraints=%s");   vals.append(body.instruction_constraints or None)
+
+    if not sets:
+        return {"ok": True}
+
+    vals.append(employee_id)
+    await execute(
+        "UPDATE employee_profiles SET " + ", ".join(sets) + " WHERE id=%s",
+        tuple(vals),
+    )
+    return {"ok": True}
+
+
+@router.post("/profiles/{employee_id}/instructions/preview")
+async def preview_instructions(
+    employee_id: str,
+    body: InstructionUpdateBody,
+    session: dict = Depends(require_admin),
+):
+    """
+    Compile the 4 instruction sections into a final system prompt string
+    without saving. Useful for previewing before committing a change.
+    Sections not provided in the body are loaded from the current DB state.
+    """
+    if employee_id not in DEFAULT_PERSONAS:
+        raise HTTPException(404, "Unknown employee")
+
+    # Load current DB state as base
+    row = await fetch_one(
+        "SELECT instruction_identity, instruction_expertise, "
+        "instruction_communication, instruction_constraints "
+        "FROM employee_profiles WHERE id=%s",
+        (employee_id,),
+    )
+    defaults = DEFAULT_INSTRUCTIONS.get(employee_id, {})
+    current = row or {}
+
+    identity      = body.instruction_identity      if body.instruction_identity      is not None else (current.get("instruction_identity")      or defaults.get("identity",      ""))
+    expertise     = body.instruction_expertise     if body.instruction_expertise     is not None else (current.get("instruction_expertise")     or defaults.get("expertise",     ""))
+    communication = body.instruction_communication if body.instruction_communication is not None else (current.get("instruction_communication") or defaults.get("communication", ""))
+    constraints   = body.instruction_constraints   if body.instruction_constraints   is not None else (current.get("instruction_constraints")   or defaults.get("constraints",   ""))
+
+    compiled = compile_prompt(identity, expertise, communication, constraints)
+    return {"employee_id": employee_id, "compiled_prompt": compiled}
+
+
+@router.post("/profiles/{employee_id}/instructions/reset")
+async def reset_instructions(
+    employee_id: str,
+    session: dict = Depends(require_admin),
+):
+    """Reset an employee's instructions back to the built-in defaults."""
+    if employee_id not in DEFAULT_PERSONAS:
+        raise HTTPException(404, "Unknown employee")
+
+    defaults = DEFAULT_INSTRUCTIONS.get(employee_id, {})
+    await execute(
+        "UPDATE employee_profiles "
+        "SET instruction_identity=%s, instruction_expertise=%s, "
+        "    instruction_communication=%s, instruction_constraints=%s "
+        "WHERE id=%s",
+        (
+            defaults.get("identity",      ""),
+            defaults.get("expertise",     ""),
+            defaults.get("communication", ""),
+            defaults.get("constraints",   ""),
+            employee_id,
+        ),
+    )
+    return {"ok": True, "message": f"{employee_id} instructions reset to defaults"}
+
+
 # ── EMPLOYEE MEMORY ───────────────────────────────────────────────────────────
 
 @router.get("/memory/{employee_id}")
@@ -624,7 +767,8 @@ async def collaborate(body: CollaborateBody, session: dict = Depends(get_session
     model    = body.model_id or cfg.get("default_ai_model") or MODEL_DEFAULTS.get(provider, "claude-sonnet-4-6")
 
     key_map = {"claude": "claude_key", "openai": "openai_key",
-               "gemini": "gemini_key", "grok": "grok_key"}
+               "gemini": "gemini_key", "grok": "grok_key",
+               "openrouter": "openrouter_key"}
     api_key = cfg.get(key_map.get(provider, "claude_key"), "")
     if not api_key:
         raise HTTPException(400, f"{provider} API key not configured — go to Settings → AI Providers")
@@ -649,8 +793,7 @@ async def collaborate(body: CollaborateBody, session: dict = Depends(get_session
         for round_num in range(1, rounds + 1):
             for emp_id in participants:
                 meta    = _EMP_META[emp_id]
-                profile = await fetch_one("SELECT * FROM employee_profiles WHERE id=%s", (emp_id,)) or {}
-                persona = profile.get("system_prompt") or DEFAULT_PERSONAS[emp_id]
+                persona = await build_employee_system_prompt(emp_id) or DEFAULT_PERSONAS[emp_id]
                 mem_ctx = await get_memory_context(emp_id)
 
                 # Extract just the identity/expertise part of persona (before FORMAT line)
@@ -796,12 +939,20 @@ async def _quick_ai_call(provider: str, key: str, model: str, prompt: str) -> st
                           "messages": [{"role": "user", "content": prompt}]},
                 )
                 return r.json()["content"][0]["text"]
-        elif provider in ("openai", "grok"):
-            url = ("https://api.x.ai/v1/chat/completions" if provider == "grok"
-                   else "https://api.openai.com/v1/chat/completions")
+        elif provider in ("openai", "grok", "openrouter"):
+            if provider == "grok":
+                url = "https://api.x.ai/v1/chat/completions"
+                extra = {}
+            elif provider == "openrouter":
+                url = "https://openrouter.ai/api/v1/chat/completions"
+                extra = {"HTTP-Referer": "https://noc-sentinel.tabadul", "X-Title": "NOC Sentinel"}
+            else:
+                url = "https://api.openai.com/v1/chat/completions"
+                extra = {}
+            headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+            headers.update(extra)
             async with httpx.AsyncClient(verify=False, timeout=_TIMEOUT_QUICK) as client:
-                r = await client.post(url,
-                    headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                r = await client.post(url, headers=headers,
                     json={"model": model, "max_tokens": 200,
                           "messages": [{"role": "user", "content": prompt}]},
                 )
@@ -888,3 +1039,803 @@ async def auto_collab(body: AutoCollabBody, session: dict = Depends(get_session)
         result = {"should_collab": False, "invite": [], "topic": ""}
 
     return result
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# F8 — EMPLOYEE STATUS / NOC BOARD
+# ══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/noc-board")
+async def noc_board(session: dict = Depends(get_session)):
+    """
+    Return real-time status for all 4 AI employees — the NOC situation display.
+    Includes: status, current task, status_since, open incident count per employee.
+    """
+    rows = await fetch_all(
+        "SELECT id, title, status, current_task, status_since FROM employee_profiles "
+        "WHERE id IN ('aria','nexus','cipher','vega') ORDER BY id"
+    )
+    board = []
+    for r in rows:
+        emp_id = r["id"]
+        # Count open incidents owned by this employee
+        inc_row = await fetch_one(
+            "SELECT COUNT(*) AS cnt FROM incidents "
+            "WHERE owner_id=%s AND status NOT IN ('closed')",
+            (emp_id,),
+        )
+        r["open_incidents"] = (inc_row or {}).get("cnt", 0)
+        r["status_since"]   = str(r.get("status_since", ""))
+        board.append(r)
+    return board
+
+
+class StatusUpdateBody(BaseModel):
+    status:       str
+    current_task: Optional[str] = None
+
+
+@router.put("/status/{employee_id}")
+async def update_employee_status(
+    employee_id: str,
+    body: StatusUpdateBody,
+    session: dict = Depends(require_admin),
+):
+    """Manually override an employee's status (admin only)."""
+    valid_statuses = {"available", "busy", "investigating", "on_call", "off_shift"}
+    if employee_id not in DEFAULT_PERSONAS:
+        raise HTTPException(404, "Unknown employee")
+    if body.status not in valid_statuses:
+        raise HTTPException(400, f"status must be one of: {', '.join(sorted(valid_statuses))}")
+
+    await set_employee_status(employee_id, body.status, body.current_task)
+    return {"ok": True}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# F1 — SHIFT SYSTEM
+# ══════════════════════════════════════════════════════════════════════════════
+
+class ShiftConfigBody(BaseModel):
+    shift_start: Optional[str] = None   # HH:MM
+    shift_end:   Optional[str] = None   # HH:MM
+    timezone:    Optional[str] = None
+    enabled:     Optional[bool] = None
+
+
+@router.get("/shift/{employee_id}")
+async def get_shift_status(employee_id: str, session: dict = Depends(get_session)):
+    """Get shift config and current active handover for an employee."""
+    if employee_id not in DEFAULT_PERSONAS:
+        raise HTTPException(404, "Unknown employee")
+
+    cfg = await fetch_one(
+        "SELECT * FROM shift_config WHERE employee_id=%s", (employee_id,)
+    )
+    active = await fetch_one(
+        "SELECT * FROM shift_handover WHERE employee_id=%s AND status='active' "
+        "ORDER BY created_at DESC LIMIT 1",
+        (employee_id,),
+    )
+    if active:
+        active["created_at"] = str(active.get("created_at", ""))
+
+    return {
+        "employee_id": employee_id,
+        "config":      cfg or {"shift_start": "07:00", "shift_end": "15:00", "timezone": "Asia/Baghdad", "enabled": True},
+        "active_shift": active,
+    }
+
+
+@router.put("/shift/{employee_id}/config")
+async def update_shift_config(
+    employee_id: str,
+    body: ShiftConfigBody,
+    session: dict = Depends(require_admin),
+):
+    """Update the shift schedule for an employee."""
+    if employee_id not in DEFAULT_PERSONAS:
+        raise HTTPException(404, "Unknown employee")
+
+    sets, vals = [], []
+    if body.shift_start is not None: sets.append("shift_start=%s"); vals.append(body.shift_start)
+    if body.shift_end   is not None: sets.append("shift_end=%s");   vals.append(body.shift_end)
+    if body.timezone    is not None: sets.append("timezone=%s");    vals.append(body.timezone)
+    if body.enabled     is not None: sets.append("enabled=%s");     vals.append(int(body.enabled))
+
+    if sets:
+        await execute(
+            "INSERT INTO shift_config (employee_id) VALUES (%s) "
+            "ON DUPLICATE KEY UPDATE " + ",".join(sets),
+            tuple([employee_id] + vals),
+        )
+    return {"ok": True}
+
+
+@router.post("/shift/{employee_id}/start")
+async def start_shift(employee_id: str, session: dict = Depends(get_session)):
+    """
+    Start a shift for an employee.
+    Closes any existing active shift, creates a new one, and triggers an AI briefing.
+    The AI briefing is generated asynchronously — poll GET /shift/{id}/handover for result.
+    """
+    if employee_id not in DEFAULT_PERSONAS:
+        raise HTTPException(404, "Unknown employee")
+
+    # Close any existing active shift
+    await execute(
+        "UPDATE shift_handover SET status='closed' WHERE employee_id=%s AND status='active'",
+        (employee_id,),
+    )
+
+    import datetime
+    today = datetime.date.today().isoformat()
+    handover_id = await execute(
+        "INSERT INTO shift_handover (employee_id, shift_date, shift_type, status) "
+        "VALUES (%s, %s, 'manual', 'active')",
+        (employee_id, today),
+    )
+
+    # Update employee status to available (they are now on shift)
+    await set_employee_status(employee_id, "available", "On shift")
+
+    # Generate AI briefing in the background
+    import asyncio
+    asyncio.create_task(_generate_shift_briefing(employee_id, handover_id))
+
+    return {
+        "ok": True,
+        "handover_id": handover_id,
+        "message": f"{employee_id.upper()} shift started. Briefing is being generated...",
+    }
+
+
+@router.post("/shift/{employee_id}/end")
+async def end_shift(employee_id: str, session: dict = Depends(get_session)):
+    """
+    End the current shift. Generates a handover report via AI and marks shift as closed.
+    """
+    if employee_id not in DEFAULT_PERSONAS:
+        raise HTTPException(404, "Unknown employee")
+
+    active = await fetch_one(
+        "SELECT * FROM shift_handover WHERE employee_id=%s AND status='active' "
+        "ORDER BY created_at DESC LIMIT 1",
+        (employee_id,),
+    )
+    if not active:
+        raise HTTPException(400, "No active shift found. Start a shift first.")
+
+    # Generate AI handover report synchronously (so caller gets the result)
+    handover_text = await _generate_shift_handover(employee_id, active["id"])
+
+    await execute(
+        "UPDATE shift_handover SET status='closed', briefing=%s WHERE id=%s",
+        (handover_text[:10000] if handover_text else active.get("briefing"), active["id"]),
+    )
+    await set_employee_status(employee_id, "off_shift", None)
+
+    return {
+        "ok": True,
+        "handover": handover_text,
+        "message": f"{employee_id.upper()} shift ended.",
+    }
+
+
+@router.get("/shift/{employee_id}/handover")
+async def get_shift_handover(employee_id: str, session: dict = Depends(get_session)):
+    """Get the most recent shift handover report."""
+    if employee_id not in DEFAULT_PERSONAS:
+        raise HTTPException(404, "Unknown employee")
+
+    row = await fetch_one(
+        "SELECT * FROM shift_handover WHERE employee_id=%s "
+        "ORDER BY created_at DESC LIMIT 1",
+        (employee_id,),
+    )
+    if not row:
+        return {"employee_id": employee_id, "handover": None}
+    row["created_at"] = str(row.get("created_at", ""))
+    return row
+
+
+async def _generate_shift_briefing(employee_id: str, handover_id: int) -> None:
+    """Background: generate shift-start briefing from recent alarms and incidents."""
+    try:
+        from app.services.employee_prompt import build_employee_system_prompt
+        from app.services.ai_stream import stream_ai
+        from app.services.zabbix_client import call_zabbix
+
+        # Pull recent alarms (last 8 hours)
+        problems = []
+        try:
+            problems = await call_zabbix("problem.get", {
+                "output": ["name", "severity", "clock"],
+                "sortfield": "eventid", "sortorder": "DESC", "limit": 20,
+            }) or []
+        except Exception:
+            pass
+
+        # Pull open incidents
+        open_incs = await fetch_all(
+            "SELECT id, title, severity, status FROM incidents "
+            "WHERE status NOT IN ('closed') ORDER BY severity DESC LIMIT 10"
+        )
+
+        alarms_text = "\n".join(
+            f"  [sev {p.get('severity',0)}] {p.get('name','?')}"
+            for p in (problems if isinstance(problems, list) else [])[:15]
+        ) or "  No active alarms."
+
+        incs_text = "\n".join(
+            f"  [INC-{r['id']:04d}] {r['title']} — {r['status'].upper()} (sev {r['severity']})"
+            for r in open_incs
+        ) or "  No open incidents."
+
+        cfg      = await fetch_one("SELECT * FROM zabbix_config LIMIT 1") or {}
+        provider = cfg.get("default_ai_provider") or "claude"
+        key_map  = {"claude": "claude_key", "openai": "openai_key",
+                    "gemini": "gemini_key", "grok": "grok_key", "openrouter": "openrouter_key"}
+        api_key  = cfg.get(key_map.get(provider, "claude_key"), "")
+        if not api_key:
+            return
+
+        model_defaults = {"claude": "claude-haiku-4-5-20251001", "openai": "gpt-4o-mini",
+                          "gemini": "gemini-2.0-flash", "grok": "grok-2-latest",
+                          "openrouter": "anthropic/claude-haiku-4-5"}
+        model   = cfg.get("default_ai_model") or model_defaults.get(provider, "claude-haiku-4-5-20251001")
+        persona = await build_employee_system_prompt(employee_id)
+        system  = (
+            (persona or f"You are {employee_id.upper()}, a NOC AI employee.")
+            + "\n\nSHIFT START MODE: Generate a concise shift briefing. "
+            "Summarize current state, flag anything that needs immediate attention, "
+            "and list your top 3 watch items for this shift. Under 250 words."
+        )
+        prompt = (
+            f"SHIFT START BRIEFING — {employee_id.upper()}\n\n"
+            f"ACTIVE NETWORK ALARMS:\n{alarms_text}\n\n"
+            f"OPEN INCIDENTS:\n{incs_text}\n\n"
+            f"Generate your shift briefing."
+        )
+
+        full_text = ""
+        async for chunk in stream_ai(provider, api_key, model, system, prompt):
+            if "data" in chunk:
+                try:
+                    d = json.loads(chunk["data"])
+                    full_text += d.get("t", "")
+                except Exception:
+                    pass
+
+        if full_text.strip():
+            await execute(
+                "UPDATE shift_handover SET briefing=%s WHERE id=%s",
+                (full_text.strip()[:10000], handover_id),
+            )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"_generate_shift_briefing failed: {e}")
+
+
+async def _generate_shift_handover(employee_id: str, handover_id: int) -> str:
+    """Synchronous: generate end-of-shift handover report from AI."""
+    try:
+        from app.services.employee_prompt import build_employee_system_prompt
+        from app.services.ai_stream import stream_ai
+
+        open_incs = await fetch_all(
+            "SELECT id, title, severity, status FROM incidents "
+            "WHERE owner_id=%s AND status NOT IN ('closed') ORDER BY severity DESC LIMIT 10",
+            (employee_id,),
+        )
+        incs_text = "\n".join(
+            f"  [INC-{r['id']:04d}] {r['title']} — {r['status'].upper()} (sev {r['severity']})"
+            for r in open_incs
+        ) or "  All incidents closed."
+
+        cfg      = await fetch_one("SELECT * FROM zabbix_config LIMIT 1") or {}
+        provider = cfg.get("default_ai_provider") or "claude"
+        key_map  = {"claude": "claude_key", "openai": "openai_key",
+                    "gemini": "gemini_key", "grok": "grok_key", "openrouter": "openrouter_key"}
+        api_key  = cfg.get(key_map.get(provider, "claude_key"), "")
+        if not api_key:
+            return "[AI key not configured — handover not generated]"
+
+        model_defaults = {"claude": "claude-haiku-4-5-20251001", "openai": "gpt-4o-mini",
+                          "gemini": "gemini-2.0-flash", "grok": "grok-2-latest",
+                          "openrouter": "anthropic/claude-haiku-4-5"}
+        model   = cfg.get("default_ai_model") or model_defaults.get(provider, "claude-haiku-4-5-20251001")
+        persona = await build_employee_system_prompt(employee_id)
+        system  = (
+            (persona or f"You are {employee_id.upper()}, a NOC AI employee.")
+            + "\n\nSHIFT END MODE: Write a concise handover report for the incoming shift. "
+            "Cover: what happened, what's still open, what they need to watch. Under 300 words."
+        )
+        prompt = (
+            f"SHIFT END HANDOVER — {employee_id.upper()}\n\n"
+            f"STILL OPEN INCIDENTS:\n{incs_text}\n\n"
+            f"Generate your handover report."
+        )
+
+        full_text = ""
+        async for chunk in stream_ai(provider, api_key, model, system, prompt):
+            if "data" in chunk:
+                try:
+                    d = json.loads(chunk["data"])
+                    full_text += d.get("t", "")
+                except Exception:
+                    pass
+
+        return full_text.strip()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"_generate_shift_handover failed: {e}")
+        return f"[Handover generation failed: {e}]"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# F3 — DEVICE / HOST KNOWLEDGE BASE
+# ══════════════════════════════════════════════════════════════════════════════
+
+class DeviceNoteBody(BaseModel):
+    host:       str = Field(..., max_length=200)
+    category:   Literal["quirk", "known_issue", "config", "contact", "performance", "security"] = "known_issue"
+    note:       str = Field(..., max_length=2000)
+    confidence: int = 3        # 1–5
+    zabbix_id:  Optional[str] = None
+
+
+@router.get("/knowledge/{employee_id}")
+async def list_device_knowledge(employee_id: str, session: dict = Depends(get_session)):
+    """List all device knowledge entries for an employee."""
+    if employee_id not in DEFAULT_PERSONAS:
+        raise HTTPException(404, "Unknown employee")
+
+    rows = await fetch_all(
+        "SELECT * FROM device_knowledge WHERE employee_id=%s "
+        "ORDER BY verified DESC, confidence DESC, updated_at DESC",
+        (employee_id,),
+    )
+    for r in rows:
+        r["created_at"] = str(r.get("created_at", ""))
+        r["updated_at"] = str(r.get("updated_at", ""))
+    return rows
+
+
+@router.get("/knowledge/{employee_id}/host/{hostname:path}")
+async def get_host_knowledge(
+    employee_id: str,
+    hostname: str,
+    session: dict = Depends(get_session),
+):
+    """Get all device knowledge entries for a specific host."""
+    if employee_id not in DEFAULT_PERSONAS:
+        raise HTTPException(404, "Unknown employee")
+
+    rows = await fetch_all(
+        "SELECT * FROM device_knowledge WHERE employee_id=%s AND host=%s "
+        "ORDER BY verified DESC, confidence DESC",
+        (employee_id, hostname),
+    )
+    for r in rows:
+        r["created_at"] = str(r.get("created_at", ""))
+        r["updated_at"] = str(r.get("updated_at", ""))
+    return {"employee_id": employee_id, "host": hostname, "notes": rows}
+
+
+@router.post("/knowledge/{employee_id}")
+async def add_device_knowledge(
+    employee_id: str,
+    body: DeviceNoteBody,
+    session: dict = Depends(get_session),
+):
+    """Add a device knowledge note (any logged-in user can contribute)."""
+    if employee_id not in DEFAULT_PERSONAS:
+        raise HTTPException(404, "Unknown employee")
+    if not 1 <= body.confidence <= 5:
+        raise HTTPException(400, "confidence must be 1–5")
+
+    note_id = await execute(
+        "INSERT INTO device_knowledge "
+        "(employee_id, host, category, note, confidence, zabbix_id) "
+        "VALUES (%s,%s,%s,%s,%s,%s)",
+        (employee_id, body.host, body.category, body.note, body.confidence, body.zabbix_id),
+    )
+    return {"ok": True, "id": note_id}
+
+
+@router.put("/knowledge/{note_id}/verify")
+async def verify_device_note(note_id: int, session: dict = Depends(require_admin)):
+    """Mark a device knowledge entry as human-verified."""
+    row = await fetch_one("SELECT id FROM device_knowledge WHERE id=%s", (note_id,))
+    if not row:
+        raise HTTPException(404, "Note not found")
+    await execute(
+        "UPDATE device_knowledge SET verified=1 WHERE id=%s", (note_id,)
+    )
+    return {"ok": True}
+
+
+@router.delete("/knowledge/{note_id}")
+async def delete_device_note(note_id: int, session: dict = Depends(require_admin)):
+    """Delete a device knowledge entry."""
+    await execute("DELETE FROM device_knowledge WHERE id=%s", (note_id,))
+    return {"ok": True}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# F5 — EMPLOYEE PERFORMANCE DASHBOARD
+# ══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/performance/{employee_id}")
+async def get_employee_performance(
+    employee_id: str,
+    session: dict = Depends(get_session),
+):
+    """
+    Return accuracy stats for an employee across all workflow domains.
+    Shows task_type, domain, correct/total, and accuracy percentage.
+    Only includes rows with at least 1 outcome recorded.
+    """
+    if employee_id not in DEFAULT_PERSONAS:
+        raise HTTPException(404, "Unknown employee")
+
+    rows = await fetch_all(
+        "SELECT task_type, domain, correct_count, total_count, updated_at "
+        "FROM employee_performance "
+        "WHERE employee_id=%s AND total_count >= 1 "
+        "ORDER BY total_count DESC, updated_at DESC",
+        (employee_id,),
+    )
+
+    total_correct = 0
+    total_runs    = 0
+    stats = []
+    for r in rows:
+        total  = int(r.get("total_count", 0))
+        correct = int(r.get("correct_count", 0))
+        accuracy = round(correct / total * 100, 1) if total > 0 else 0.0
+        total_correct += correct
+        total_runs    += total
+        stats.append({
+            "task_type":     r.get("task_type"),
+            "domain":        r.get("domain"),
+            "correct_count": correct,
+            "total_count":   total,
+            "accuracy_pct":  accuracy,
+            "updated_at":    str(r.get("updated_at", "")),
+        })
+
+    overall_accuracy = round(total_correct / total_runs * 100, 1) if total_runs > 0 else None
+
+    return {
+        "employee_id":      employee_id,
+        "overall_accuracy": overall_accuracy,
+        "total_runs":       total_runs,
+        "total_correct":    total_correct,
+        "breakdown":        stats,
+    }
+
+
+@router.get("/performance")
+async def get_all_performance(session: dict = Depends(get_session)):
+    """Return a summary accuracy for all 4 employees."""
+    result = {}
+    for emp_id in ("aria", "nexus", "cipher", "vega"):
+        rows = await fetch_all(
+            "SELECT correct_count, total_count FROM employee_performance "
+            "WHERE employee_id=%s AND total_count >= 1",
+            (emp_id,),
+        )
+        total   = sum(int(r["total_count"])   for r in rows)
+        correct = sum(int(r["correct_count"]) for r in rows)
+        result[emp_id] = {
+            "total_runs":       total,
+            "total_correct":    correct,
+            "overall_accuracy": round(correct / total * 100, 1) if total else None,
+        }
+    return result
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# EMPLOYEE TYPE CATALOGUE
+# ══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/employee-types")
+async def list_employee_types(session: dict = Depends(get_session)):
+    """Return all available employee type templates."""
+    result = []
+    for key, meta in EMPLOYEE_TYPES.items():
+        instructions = EMPLOYEE_TYPE_INSTRUCTIONS.get(key, {})
+        result.append({
+            "key":         key,
+            "label":       meta["label"],
+            "icon":        meta["icon"],
+            "desc":        meta["desc"],
+            "instructions": {
+                "identity":      instructions.get("identity",      ""),
+                "expertise":     instructions.get("expertise",     ""),
+                "communication": instructions.get("communication", ""),
+                "constraints":   instructions.get("constraints",   ""),
+            },
+        })
+    return result
+
+
+@router.get("/employee-types/{type_key}/instructions")
+async def get_type_instructions(type_key: str, session: dict = Depends(get_session)):
+    """Get the default instructions for a specific employee type."""
+    if type_key not in EMPLOYEE_TYPES:
+        raise HTTPException(404, f"Unknown employee type: {type_key}")
+    instructions = EMPLOYEE_TYPE_INSTRUCTIONS.get(type_key, {})
+    return {
+        "key":           type_key,
+        "label":         EMPLOYEE_TYPES[type_key]["label"],
+        "identity":      instructions.get("identity",      ""),
+        "expertise":     instructions.get("expertise",     ""),
+        "communication": instructions.get("communication", ""),
+        "constraints":   instructions.get("constraints",   ""),
+    }
+
+
+class EmployeeTypeUpdateBody(BaseModel):
+    employee_type: str
+
+
+@router.put("/profiles/{employee_id}/type")
+async def update_employee_type(
+    employee_id: str,
+    body: EmployeeTypeUpdateBody,
+    session: dict = Depends(require_admin),
+):
+    """Update the employee type for an employee and optionally load type defaults."""
+    if employee_id not in DEFAULT_PERSONAS:
+        raise HTTPException(404, "Unknown employee")
+    if body.employee_type not in EMPLOYEE_TYPES:
+        raise HTTPException(400, f"Unknown type: {body.employee_type}")
+
+    await execute(
+        "UPDATE employee_profiles SET employee_type=%s WHERE id=%s",
+        (body.employee_type, employee_id),
+    )
+    return {"ok": True, "employee_type": body.employee_type}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# EMPLOYEE ACTIVITY HISTORY
+# ══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/history/{employee_id}")
+async def get_employee_history(
+    employee_id: str,
+    event_type:  Optional[str] = None,   # filter: workflow|incident|message|shift|memory
+    limit:       int = 50,
+    session: dict = Depends(get_session),
+):
+    """
+    Return a unified chronological activity history for an employee.
+    Aggregates: workflow runs, incident updates, peer messages, shift handovers, memories.
+    """
+    if employee_id not in DEFAULT_PERSONAS:
+        raise HTTPException(404, "Unknown employee")
+
+    events = []
+
+    # Workflow runs
+    if not event_type or event_type == "workflow":
+        rows = await fetch_all(
+            "SELECT wr.id, wr.workflow_id, wr.ai_response, wr.status, wr.outcome, "
+            "       wr.outcome_note, wr.created_at, w.name AS workflow_name "
+            "FROM workflow_runs wr "
+            "LEFT JOIN workflows w ON w.id=wr.workflow_id "
+            "WHERE w.employee_id=%s "
+            "ORDER BY wr.created_at DESC LIMIT %s",
+            (employee_id, limit),
+        )
+        for r in rows:
+            events.append({
+                "event_type":   "workflow",
+                "event_id":     r["id"],
+                "title":        r.get("workflow_name") or f"Workflow #{r['workflow_id']}",
+                "summary":      (r.get("ai_response") or "")[:300],
+                "status":       r.get("status"),
+                "outcome":      r.get("outcome"),
+                "outcome_note": r.get("outcome_note"),
+                "created_at":   str(r.get("created_at", "")),
+            })
+
+    # Incident updates
+    if not event_type or event_type == "incident":
+        rows = await fetch_all(
+            "SELECT iu.id, iu.incident_id, iu.update_text, iu.update_type, iu.created_at, "
+            "       i.title AS incident_title, i.severity, i.status AS inc_status "
+            "FROM incident_updates iu "
+            "JOIN incidents i ON i.id=iu.incident_id "
+            "WHERE iu.employee_id=%s "
+            "ORDER BY iu.created_at DESC LIMIT %s",
+            (employee_id, limit),
+        )
+        for r in rows:
+            events.append({
+                "event_type": "incident",
+                "event_id":   r["id"],
+                "title":      r.get("incident_title") or f"Incident #{r['incident_id']}",
+                "summary":    (r.get("update_text") or "")[:300],
+                "status":     r.get("update_type"),
+                "severity":   r.get("severity"),
+                "inc_status": r.get("inc_status"),
+                "created_at": str(r.get("created_at", "")),
+            })
+
+    # Peer messages (sent or received)
+    if not event_type or event_type == "message":
+        rows = await fetch_all(
+            "SELECT id, from_employee, to_employee, subject, body, reply, status, created_at "
+            "FROM employee_messages "
+            "WHERE from_employee=%s OR to_employee=%s "
+            "ORDER BY created_at DESC LIMIT %s",
+            (employee_id, employee_id, limit),
+        )
+        for r in rows:
+            direction = "sent" if r["from_employee"] == employee_id else "received"
+            peer = r["to_employee"] if direction == "sent" else r["from_employee"]
+            events.append({
+                "event_type": "message",
+                "event_id":   r["id"],
+                "title":      r.get("subject") or f"{direction.title()} message {peer.upper()}",
+                "summary":    (r.get("body") or "")[:300],
+                "reply":      (r.get("reply") or "")[:200],
+                "status":     r.get("status"),
+                "direction":  direction,
+                "peer":       peer,
+                "created_at": str(r.get("created_at", "")),
+            })
+
+    # Shift handovers
+    if not event_type or event_type == "shift":
+        rows = await fetch_all(
+            "SELECT id, shift_date, shift_type, briefing, status, created_at "
+            "FROM shift_handover WHERE employee_id=%s "
+            "ORDER BY created_at DESC LIMIT %s",
+            (employee_id, limit),
+        )
+        for r in rows:
+            events.append({
+                "event_type": "shift",
+                "event_id":   r["id"],
+                "title":      f"Shift {r.get('shift_type','').title()} — {r.get('shift_date','')}",
+                "summary":    (r.get("briefing") or "")[:300],
+                "status":     r.get("status"),
+                "created_at": str(r.get("created_at", "")),
+            })
+
+    # Memory entries
+    if not event_type or event_type == "memory":
+        rows = await fetch_all(
+            "SELECT id, task_type, task_summary, key_learnings, created_at "
+            "FROM employee_memory WHERE employee_id=%s "
+            "ORDER BY created_at DESC LIMIT %s",
+            (employee_id, limit),
+        )
+        for r in rows:
+            events.append({
+                "event_type": "memory",
+                "event_id":   r["id"],
+                "title":      r.get("task_summary") or f"Memory — {r.get('task_type','')}",
+                "summary":    (r.get("key_learnings") or "")[:300],
+                "status":     r.get("task_type"),
+                "created_at": str(r.get("created_at", "")),
+            })
+
+    # Sort all events by created_at descending and trim
+    def _dt_key(ev):
+        try:
+            return ev["created_at"] or ""
+        except Exception:
+            return ""
+
+    events.sort(key=_dt_key, reverse=True)
+    events = events[:limit]
+
+    # Attach feedback counts
+    all_ids_by_type: dict[str, list[int]] = {}
+    for ev in events:
+        all_ids_by_type.setdefault(ev["event_type"], []).append(ev["event_id"])
+
+    feedback_counts: dict[str, dict[int, int]] = {}
+    for etype, ids in all_ids_by_type.items():
+        if not ids:
+            continue
+        placeholders = ",".join(["%s"] * len(ids))
+        rows = await fetch_all(
+            f"SELECT event_id, COUNT(*) AS cnt FROM employee_feedback "
+            f"WHERE employee_id=%s AND event_type=%s AND event_id IN ({placeholders}) "
+            f"GROUP BY event_id",
+            tuple([employee_id, etype] + ids),
+        )
+        feedback_counts[etype] = {r["event_id"]: r["cnt"] for r in rows}
+
+    for ev in events:
+        ev["feedback_count"] = feedback_counts.get(ev["event_type"], {}).get(ev["event_id"], 0)
+
+    return {"employee_id": employee_id, "events": events}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# EMPLOYEE FEEDBACK (human comments on history events)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class FeedbackBody(BaseModel):
+    employee_id: str
+    event_type:  str
+    event_id:    int
+    comment:     str
+    rating:      Optional[int] = None   # 1=wrong, 2=ok, 3=good
+
+
+@router.post("/feedback")
+async def add_feedback(body: FeedbackBody, session: dict = Depends(get_session)):
+    """
+    Add a human comment/correction to a specific activity history event.
+    The comment is also saved to employee_memory so the AI learns from it.
+    """
+    if body.employee_id not in DEFAULT_PERSONAS:
+        raise HTTPException(404, "Unknown employee")
+
+    comment = body.comment.strip()
+    if not comment:
+        raise HTTPException(400, "comment is required")
+
+    valid_types = {"workflow", "incident", "message", "shift", "memory"}
+    if body.event_type not in valid_types:
+        raise HTTPException(400, f"event_type must be one of: {', '.join(sorted(valid_types))}")
+
+    if body.rating is not None and body.rating not in (1, 2, 3):
+        raise HTTPException(400, "rating must be 1 (wrong), 2 (ok), or 3 (good)")
+
+    feedback_id = await execute(
+        "INSERT INTO employee_feedback (employee_id, event_type, event_id, comment, rating, created_by) "
+        "VALUES (%s,%s,%s,%s,%s,%s)",
+        (body.employee_id, body.event_type, body.event_id, comment, body.rating, "operator"),
+    )
+
+    # Save feedback to memory so AI learns from it
+    rating_labels = {1: "WRONG — should not do this", 2: "acceptable but could be improved", 3: "correct approach"}
+    rating_str = f" [Rated: {rating_labels.get(body.rating, '')}]" if body.rating else ""
+    from app.services.memory import save_memory_direct
+    import asyncio
+    asyncio.create_task(save_memory_direct(
+        employee_id=body.employee_id,
+        task_type=f"feedback_{body.event_type}",
+        task_summary=f"Human feedback on {body.event_type} event #{body.event_id}{rating_str}",
+        key_learnings=comment[:1000],
+    ))
+
+    return {"ok": True, "feedback_id": feedback_id}
+
+
+@router.get("/feedback/{employee_id}/{event_type}/{event_id}")
+async def get_event_feedback(
+    employee_id: str,
+    event_type:  str,
+    event_id:    int,
+    session: dict = Depends(get_session),
+):
+    """Get all feedback comments for a specific history event."""
+    rows = await fetch_all(
+        "SELECT id, comment, rating, created_by, created_at "
+        "FROM employee_feedback "
+        "WHERE employee_id=%s AND event_type=%s AND event_id=%s "
+        "ORDER BY created_at ASC",
+        (employee_id, event_type, event_id),
+    )
+    for r in rows:
+        r["created_at"] = str(r.get("created_at", ""))
+    return {"employee_id": employee_id, "event_type": event_type, "event_id": event_id, "feedback": rows}
+
+
+@router.delete("/feedback/{feedback_id}")
+async def delete_feedback(feedback_id: int, session: dict = Depends(require_admin)):
+    """Delete a specific feedback entry."""
+    await execute("DELETE FROM employee_feedback WHERE id=%s", (feedback_id,))
+    return {"ok": True}

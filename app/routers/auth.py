@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Request, HTTPException, Depends
 from pydantic import BaseModel
+from collections import defaultdict
 import secrets
+import time
 
 from app.database import fetch_one, execute
 from app.deps import get_session
@@ -8,6 +10,20 @@ from app.services.ldap_auth import try_ldap_auth
 from app.utils.password import hash_password, verify_password
 
 router = APIRouter()
+
+# ── Login rate limiter (in-memory; replace with Redis in scaled deployments) ──
+_login_attempts: dict[str, list[float]] = defaultdict(list)
+_LOGIN_WINDOW   = 900   # 15-minute sliding window
+_LOGIN_MAX      = 10    # max attempts before lockout
+
+
+def _check_rate_limit(ip: str) -> None:
+    now      = time.time()
+    recent   = [t for t in _login_attempts[ip] if now - t < _LOGIN_WINDOW]
+    _login_attempts[ip] = recent
+    if len(recent) >= _LOGIN_MAX:
+        raise HTTPException(429, "Too many login attempts. Try again in 15 minutes.")
+    _login_attempts[ip].append(now)
 
 
 class LoginBody(BaseModel):
@@ -22,6 +38,7 @@ class PasswordBody(BaseModel):
 
 @router.post("/login")
 async def login(body: LoginBody, request: Request):
+    _check_rate_limit(request.client.host if request.client else "unknown")
     username = body.username.strip()
     password = body.password
 

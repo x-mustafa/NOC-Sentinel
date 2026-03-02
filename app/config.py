@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings
+from pydantic import validator
 
 
 class Settings(BaseSettings):
@@ -15,6 +16,20 @@ class Settings(BaseSettings):
     ms365_tenant_id:     str = ""
     ms365_client_id:     str = ""
     ms365_client_secret: str = ""
+
+    @validator("app_secret")
+    def secret_must_be_strong(cls, v):
+        _default = "change_this_to_a_random_string_at_least_32_chars_long"
+        if v == _default:
+            import logging
+            logging.getLogger(__name__).warning(
+                "APP_SECRET is using the default placeholder value. "
+                "Set a strong random secret in .env before deploying to production. "
+                "Generate one with: python3 -c \"import secrets; print(secrets.token_hex(32))\""
+            )
+        elif len(v) < 32:
+            raise ValueError("APP_SECRET must be at least 32 characters long")
+        return v
 
     class Config:
         env_file = ".env"

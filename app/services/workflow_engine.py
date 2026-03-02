@@ -144,6 +144,16 @@ async def _run_workflow(workflow_id: int, trigger_data: dict):
         (workflow_id, json.dumps(trigger_data, default=str)),
     )
 
+    emp_id = wf.get("employee_id") or "aria"
+
+    # Set employee status to busy while processing the workflow
+    try:
+        from app.services.employee_context import set_employee_busy, set_employee_available
+        await set_employee_busy(emp_id, f"Workflow: {wf.get('name', '')[:80]}")
+    except Exception:
+        pass
+
+    ai_response = ""
     try:
         ai_response = await _get_ai_response(wf, trigger_data)
         action_result = await _execute_action(wf, trigger_data, ai_response)
@@ -151,43 +161,95 @@ async def _run_workflow(workflow_id: int, trigger_data: dict):
             "UPDATE workflow_runs SET ai_response=%s, action_result=%s, status='success' WHERE id=%s",
             (ai_response[:4000] if ai_response else "", action_result, run_id),
         )
+
+        # Auto-save what was found as employee memory (no extra AI call)
+        if ai_response.strip():
+            asyncio.create_task(
+                _auto_save_workflow_memory(emp_id, wf, trigger_data, ai_response)
+            )
+
+        # Anomaly detection: did the AI flag something beyond the trigger?
+        asyncio.create_task(
+            _check_and_announce_anomaly(emp_id, wf, trigger_data, ai_response)
+        )
+
     except Exception as e:
         logger.error(f"Workflow {workflow_id} run failed: {e}")
         await execute(
             "UPDATE workflow_runs SET status='error', action_result=%s WHERE id=%s",
             (str(e)[:500], run_id),
         )
+    finally:
+        # Always restore employee to available after workflow completes
+        try:
+            from app.services.employee_context import set_employee_available
+            await set_employee_available(emp_id)
+        except Exception:
+            pass
 
 
 async def _get_ai_response(wf: dict, trigger_data: dict) -> str:
     from app.database import fetch_one
+    from app.services.employee_prompt import build_employee_system_prompt
+    from app.services.employee_context import get_full_operational_context
 
     prompt_tmpl = wf.get("prompt_template") or "Analyze this event and provide a brief assessment."
     prompt = prompt_tmpl
+    host_name = None
     if "problem" in trigger_data:
         p = trigger_data["problem"]
         host_name = str(p.get("hosts", ["?"])[0] if p.get("hosts") else "?")
+        if host_name == "?":
+            host_name = None
         prompt = (prompt_tmpl
                   .replace("{alarm_name}", p.get("name", ""))
-                  .replace("{host}", host_name)
+                  .replace("{host}", host_name or "unknown")
                   .replace("{severity}", str(p.get("severity", 0))))
 
     cfg = await fetch_one("SELECT * FROM zabbix_config LIMIT 1") or {}
     provider = cfg.get("default_ai_provider") or "claude"
     model    = cfg.get("default_ai_model")    or ""
-    key_map  = {"claude": "claude_key", "openai": "openai_key", "gemini": "gemini_key", "grok": "grok_key"}
+    key_map  = {"claude": "claude_key", "openai": "openai_key",
+                "gemini": "gemini_key", "grok": "grok_key", "openrouter": "openrouter_key"}
     api_key  = cfg.get(key_map.get(provider, "claude_key"), "")
 
     if not api_key:
         return "[No AI key configured]"
 
     model_defaults = {"claude": "claude-haiku-4-5-20251001", "openai": "gpt-4o-mini",
-                      "gemini": "gemini-2.0-flash", "grok": "grok-2-latest"}
+                      "gemini": "gemini-2.0-flash", "grok": "grok-2-latest",
+                      "openrouter": "anthropic/claude-haiku-4-5"}
     model = model or model_defaults.get(provider, "claude-haiku-4-5-20251001")
 
+    # Load the assigned employee's full persona, fall back to generic
+    emp_id = wf.get("employee_id") or "aria"
+    persona = await build_employee_system_prompt(emp_id)
+
+    # Load operational context: open incidents + shift + device knowledge for this host
+    ops_ctx = await get_full_operational_context(emp_id, host=host_name)
+
+    # F6 — Inject matching approved runbooks into the prompt
+    runbook_ctx = ""
+    alarm_text = trigger_data.get("problem", {}).get("name", "") if "problem" in trigger_data else ""
+    if alarm_text:
+        try:
+            from app.routers.runbooks import find_matching_runbooks, format_runbook_for_prompt
+            matching = await find_matching_runbooks(alarm_text, limit=2)
+            if matching:
+                runbook_ctx = "\n\n---- RELEVANT RUNBOOKS ----"
+                for rb in matching:
+                    runbook_ctx += format_runbook_for_prompt(rb)
+                runbook_ctx += "\n---- END RUNBOOKS ----"
+        except Exception as e:
+            logger.debug(f"Runbook injection failed (non-fatal): {e}")
+
     system = (
-        "You are NOC Sentinel AI for Tabadul payment infrastructure. "
-        "Provide concise, actionable analysis. Be direct and specific."
+        (persona or "You are NOC Sentinel AI for Tabadul payment infrastructure.")
+        + ops_ctx
+        + runbook_ctx
+        + "\n\nWORKFLOW MODE: You are responding to an automated trigger. "
+        "Be concise and actionable. Lead with the most critical finding. "
+        "No preamble, no closing remarks."
     )
 
     full_response = ""
@@ -303,3 +365,145 @@ async def reload_scheduled_workflows():
         if job.id.startswith("wf_"):
             job.remove()
     await _register_scheduled_workflows()
+
+
+# ── Auto-memory: save workflow findings without a second AI call ───────────────
+
+async def _auto_save_workflow_memory(
+    emp_id: str,
+    wf: dict,
+    trigger_data: dict,
+    ai_response: str,
+) -> None:
+    """Store the workflow outcome in the employee's long-term memory."""
+    try:
+        from app.services.memory import save_memory_direct
+
+        trigger_type = wf.get("trigger_type", "manual")
+        wf_name      = wf.get("name", "Workflow")
+
+        # Build task summary from trigger context
+        if "problem" in trigger_data:
+            p = trigger_data["problem"]
+            summary = f"{wf_name}: alarm '{p.get('name','?')}' sev {p.get('severity','?')}"
+        else:
+            summary = f"{wf_name} ({trigger_type} trigger)"
+
+        # Extract key learnings: first 3 distinct sentences from the AI response
+        sentences = [s.strip() for s in ai_response.replace("\n", " ").split(".") if len(s.strip()) > 20]
+        learnings = ". ".join(sentences[:3])
+        if not learnings:
+            learnings = ai_response[:300]
+
+        await save_memory_direct(emp_id, f"workflow_{trigger_type}", summary, learnings)
+    except Exception as e:
+        logger.debug(f"_auto_save_workflow_memory failed (non-fatal): {e}")
+
+
+# ── Anomaly detector: auto-announce findings beyond the trigger ────────────────
+
+# Keywords that signal an anomaly was detected in the AI response
+_ANOMALY_SIGNALS = {
+    "critical", "breached", "anomaly", "anomalous", "unusual", "unexpected",
+    "suspicious", "investigate immediately", "immediately investigate",
+    "out of pattern", "not seen before", "first time", "escalate",
+    "high risk", "at risk", "sla breach", "sla at risk",
+    "multiple hosts", "spread", "cascade", "correlated",
+    "unauthorized", "attack", "intrusion", "threat detected",
+    "data exfiltration", "lateral movement", "compromise",
+    "packet loss", "link down", "failover", "fail-over", "ha split",
+    "gateway unreachable", "payment gateway", "transaction failure",
+    "bgp flap", "route withdrawn", "isp down",
+}
+
+# Which employee to auto-notify for different anomaly types
+_ANOMALY_ROUTING = {
+    "security": "cipher",
+    "network":  "nexus",
+    "sla":      "vega",
+    "default":  "aria",
+}
+
+
+def _detect_anomaly(ai_response: str) -> tuple[bool, str]:
+    """
+    Scan AI response for anomaly signals.
+    Returns (is_anomaly, severity_label).
+    """
+    lower = ai_response.lower()
+    hits  = [kw for kw in _ANOMALY_SIGNALS if kw in lower]
+    if not hits:
+        return False, ""
+
+    # Classify severity by keyword type
+    critical_kws = {"breached", "sla breach", "attack", "intrusion", "compromise",
+                    "data exfiltration", "lateral movement", "payment gateway",
+                    "transaction failure", "ha split"}
+    if any(kw in hits for kw in critical_kws):
+        return True, "CRITICAL"
+    return True, "HIGH"
+
+
+async def _check_and_announce_anomaly(
+    emp_id: str,
+    wf: dict,
+    trigger_data: dict,
+    ai_response: str,
+) -> None:
+    """
+    After a workflow run, detect if the AI flagged something anomalous
+    beyond the original trigger. If yes, auto-create a peer message to
+    the most relevant colleague and log it.
+    """
+    try:
+        is_anomaly, severity = _detect_anomaly(ai_response)
+        if not is_anomaly:
+            return
+
+        # Determine the best colleague to notify (not same as current employee)
+        lower = ai_response.lower()
+        if any(kw in lower for kw in {"attack", "unauthorized", "intrusion", "threat", "compromise",
+                                       "exfiltration", "lateral", "firewall", "ids", "ips"}):
+            notify_emp = "cipher"
+        elif any(kw in lower for kw in {"bgp", "isp", "link down", "failover", "ha split",
+                                          "route", "interface", "latency", "packet loss"}):
+            notify_emp = "nexus"
+        elif any(kw in lower for kw in {"sla", "breach", "error budget", "slo", "uptime"}):
+            notify_emp = "vega"
+        else:
+            notify_emp = "aria"
+
+        # Don't notify yourself
+        if notify_emp == emp_id:
+            candidates = [e for e in ("aria", "nexus", "cipher", "vega") if e != emp_id]
+            notify_emp = candidates[0] if candidates else "aria"
+
+        wf_name = wf.get("name", "Workflow")
+        alarm_name = ""
+        if "problem" in trigger_data:
+            alarm_name = trigger_data["problem"].get("name", "")
+
+        subject = f"[{severity}] Anomaly detected during '{wf_name}'"
+        body    = (
+            f"While running workflow '{wf_name}', I detected something beyond the "
+            f"original trigger that requires attention.\n\n"
+            f"Original alarm: {alarm_name or '(scheduled/manual)'}\n\n"
+            f"Finding:\n{ai_response[:1200]}\n\n"
+            f"Please review and take action if needed."
+        )
+
+        # Save as peer message (will auto-generate a reply from the notified employee)
+        from app.database import execute as db_execute
+        await db_execute(
+            "INSERT INTO employee_messages "
+            "(from_employee, to_employee, subject, body, initiated_by) "
+            "VALUES (%s,%s,%s,%s,'auto-anomaly')",
+            (emp_id, notify_emp, subject[:300], body[:3000]),
+        )
+        logger.warning(
+            f"[ANOMALY] {emp_id.upper()} → {notify_emp.upper()}: "
+            f"{severity} anomaly during '{wf_name}' — auto-message sent"
+        )
+
+    except Exception as e:
+        logger.debug(f"_check_and_announce_anomaly failed (non-fatal): {e}")
